@@ -83,19 +83,30 @@ Every error is `{ statusCode, code, message, details?, requestId }`. Every respo
 ## Deploy
 
 **GitHub Pages (web app, browser mode).** Every push to `main` that passes CI is deployed by
-[deploy-pages.yml](.github/workflows/deploy-pages.yml) to the Pages site, which is configured with the
-custom domain **<https://studio.madproducts.ai>** (the default `madproducts-ai.github.io/mad-studio`
-URL redirects there). The workflow reads the Pages settings through `actions/configure-pages` and passes
+[deploy-pages.yml](.github/workflows/deploy-pages.yml) to <https://madproducts-ai.github.io/mad-studio/> as a browser-mode demo. The workflow reads the Pages settings through `actions/configure-pages` and passes
 the matching `--base-href`, so the build follows whatever domain is configured. The `pages` build
 configuration swaps in `environment.pages.ts` (no API URL, so the studio runs the planner in the browser
 and saves projects locally, shown as **Browser mode**), and `scripts/finalize-pages.mjs` adds `404.html`
 for deep links plus `.nojekyll`.
 
-DNS for the custom domain: a `CNAME` record for `studio` pointing at `madproducts-ai.github.io`
-(DNS-only if the zone is behind a proxy such as Cloudflare). Once the certificate is issued, enable
-"Enforce HTTPS" in Settings → Pages, or `gh api -X PUT repos/madproducts-ai/mad-studio/pages -F https_enforced=true`.
-To attach a hosted API, set `apiUrl` in `environment.pages.ts`.
+The production site lives on the fleet origin (see IIS below); Pages stays on the repository path so the two never claim the same hostname.
 
+**IIS on the MAD fleet origin (studio.madproducts.ai, full stack).** [deploy/deploy-iis.ps1](deploy/deploy-iis.ps1)
+follows the fleet convention (vendored `Mad.Deploy 1.1.0`): site `studio` serves the production Angular build on
+https :8132 and site `studioapi` hosts the Node API on https :9132, each with a :443 SNI binding on the shared
+`*.madproducts.ai` certificate that Cloudflare proxies to. The API runs under AspNetCoreModuleV2 out-of-process,
+which launches `node.exe` with [deploy/api/server.cjs](deploy/api/server.cjs) (it maps the module-assigned
+`ASPNETCORE_PORT` onto `PORT`); configuration is injected through `<environmentVariables>` in the site's
+`web.config`. The script builds both apps, stages the API runtime (bundle + pinned runtime dependencies) in
+`apps/api/publish`, runs `db:migrate` and `db:seed` against PostgreSQL, publishes, binds, and verifies that
+`/v1/health` reports `storage: postgres` in production. Run it elevated after copying `deploy/.env.deploy.example`
+to `deploy/.env.deploy` (untracked):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy\deploy-iis.ps1
+```
+
+Switches: `-SkipBuild`, `-SkipInstall`, `-SkipMigrate`. `deploy\test-mad-deploy.ps1` runs the module self-tests.
 **API.** `npm run build:api` produces a single `apps/api/dist/main.js`; run it with `DATABASE_URL`
 set on any Node 22+ host with PostgreSQL reachable.
 ## Environment
