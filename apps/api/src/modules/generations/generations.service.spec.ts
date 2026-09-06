@@ -66,6 +66,37 @@ describe('GenerationsService', () => {
     expect((await service.get(DEMO_WORKSPACE_ID, created.id)).status).toBe('complete');
   });
 
+  it('does not announce completion before the document is durable', async () => {
+    const repo = new MemoryRepository();
+    // Record document writes and status writes in the same order the service performs them.
+    const order: string[] = [];
+    const append = repo.documents.append.bind(repo.documents);
+    repo.documents.append = async (...args: Parameters<typeof append>) => {
+      const record = await append(...args);
+      order.push(`document:v${record.version}`);
+      return record;
+    };
+    const setStatus = repo.generations.setStatus.bind(repo.generations);
+    repo.generations.setStatus = async (id: string, status: Parameters<typeof setStatus>[1]) => {
+      order.push(`status:${status}`);
+      return setStatus(id, status);
+    };
+    const service = new GenerationsService(repo, env, new ProjectsService(repo), new ModelPlanner(env, fakeClient('spec')));
+    const created = await service.create(DEMO_WORKSPACE_ID, { prompt: PROMPT, designSystem: 'tailwind' });
+    await new Promise<void>((resolve, reject) => {
+      // The subscriber runs synchronously on emit, so this interleaving is exact.
+      service.stream(DEMO_WORKSPACE_ID, created.id, -1).subscribe({ next: (event) => order.push(`event:${event.type}`), error: reject, complete: () => resolve() });
+    });
+
+    const document = order.indexOf('document:v1');
+    expect(document).toBeGreaterThan(0);
+    expect(order.indexOf('event:done')).toBeGreaterThan(document);
+    expect(order.indexOf('status:complete')).toBeGreaterThan(document);
+    expect(order.indexOf('event:node.add')).toBeLessThan(document);
+    // The closing events are the last thing that happens, after the write.
+    expect(order.slice(document + 1)).toEqual(['status:complete', 'event:status', 'event:done']);
+  });
+
   it('falls back to the deterministic planner when the model fails, and says so', async () => {
     const { repo, service } = boot(new ModelPlanner(env, fakeClient('fail')));
     const created = await service.create(DEMO_WORKSPACE_ID, { prompt: PROMPT, designSystem: 'material' });

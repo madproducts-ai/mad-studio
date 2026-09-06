@@ -1,4 +1,4 @@
-import { type CallHandler, type ExecutionContext, Injectable, Logger, type NestInterceptor } from '@nestjs/common';
+import { type CallHandler, type ExecutionContext, HttpException, Injectable, Logger, type NestInterceptor } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { type Observable, tap } from 'rxjs';
 
@@ -12,14 +12,16 @@ export class LoggingInterceptor implements NestInterceptor {
     const res = http.getResponse<Response>();
     return next.handle().pipe(
       tap({
-        complete: () => this.log(req, res),
-        error: () => this.log(req, res),
+        complete: () => this.log(req, res.statusCode),
+        // The exception filter has not run yet, so the response still carries its
+        // default status; take the real one from the error instead.
+        error: (error: unknown) => this.log(req, error instanceof HttpException ? error.getStatus() : 500),
       }),
     );
   }
 
-  private log(req: Request, res: Response): void {
+  private log(req: Request, status: number): void {
     const ms = Math.round(performance.now() - (req.startedAt ?? performance.now()));
-    this.logger.log(`${req.method} ${req.originalUrl} → ${res.statusCode} ${ms}ms [${req.requestId}]`);
+    this.logger.log(`${req.method} ${req.originalUrl} → ${status} ${ms}ms [${req.requestId}]`);
   }
 }

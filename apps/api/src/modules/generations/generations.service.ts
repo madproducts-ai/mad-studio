@@ -188,7 +188,23 @@ export class GenerationsService implements OnModuleDestroy {
     let lastStatus: GenerationStatus = 'queued';
     let nodeCount: number | null = null;
 
+    const emit = async (event: TimedEvent['event']): Promise<void> => {
+      const full = GenerationEventSchema.parse({ ...event, seq: live.seq, at: new Date().toISOString() });
+      live.seq += 1;
+      if (full.type === 'status') {
+        lastStatus = full.status;
+        await this.repo.generations.setStatus(id, full.status);
+      }
+      if (full.type === 'done') nodeCount = full.nodeCount;
+      live.subject.next(full);
+      this.queuePersist(id, live, full);
+    };
+
     try {
+      // "Complete" must mean the document is durable: the closing events are held
+      // back until the document is written, so a client that reacts to `done`
+      // (or polls the generation's status) can always read the saved document.
+      const closing: TimedEvent['event'][] = [];
       let outcome: PlanOutcome | null = null;
       while (outcome === null) {
         if (abort.signal.aborted) throw new CancelledError();
@@ -200,15 +216,11 @@ export class GenerationsService implements OnModuleDestroy {
         const { delayMs, event } = next.value;
         if (delayMs > 0) await this.sleep(delayMs, abort.signal);
         if (abort.signal.aborted) throw new CancelledError();
-        const full = GenerationEventSchema.parse({ ...event, seq: live.seq, at: new Date().toISOString() });
-        live.seq += 1;
-        if (full.type === 'status') {
-          lastStatus = full.status;
-          await this.repo.generations.setStatus(id, full.status);
+        if (event.type === 'done' || (event.type === 'status' && event.status === 'complete')) {
+          closing.push(event);
+          continue;
         }
-        if (full.type === 'done') nodeCount = full.nodeCount;
-        live.subject.next(full);
-        this.queuePersist(id, live, full);
+        await emit(event);
       }
       await this.flush(id, live);
       const project = await this.repo.projects.findById(projectId);
@@ -216,6 +228,8 @@ export class GenerationsService implements OnModuleDestroy {
         await this.repo.documents.append(projectId, project.documentVersion, { ...outcome.document, updatedAt: new Date().toISOString() }, 'ai', id);
         if (outcome.rename) await this.repo.projects.update(projectId, outcome.rename);
       }
+      for (const event of closing) await emit(event);
+      await this.flush(id, live);
       await this.repo.generations.complete(id, { status: 'complete', durationMs: Date.now() - startedAt, nodeCount, error: null });
       this.logger.log(`Generation ${id} complete via ${outcome.planner} planner in ${Date.now() - startedAt}ms (${nodeCount ?? 0} nodes)`);
       live.subject.complete();
