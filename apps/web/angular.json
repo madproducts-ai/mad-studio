@@ -70,7 +70,6 @@
                 }
               ],
               "outputHashing": "all",
-              "baseHref": "/mad-studio/",
               "fileReplacements": [
                 {
                   "replace": "src/environments/environment.ts",

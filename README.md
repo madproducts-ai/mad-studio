@@ -83,14 +83,18 @@ Every error is `{ statusCode, code, message, details?, requestId }`. Every respo
 ## Deploy
 
 **GitHub Pages (web app, browser mode).** Every push to `main` that passes CI is deployed by
-[deploy-pages.yml](.github/workflows/deploy-pages.yml) to <https://madproducts-ai.github.io/mad-studio/>.
-The `pages` build configuration sets `baseHref: /mad-studio/`, swaps in `environment.pages.ts`
-(no API URL, so the studio runs the planner in the browser and saves projects locally, shown as
-**Browser mode**), and `scripts/finalize-pages.mjs` adds `404.html` for deep links plus `.nojekyll`.
+[deploy-pages.yml](.github/workflows/deploy-pages.yml) to the Pages site, which is configured with the
+custom domain **<https://studio.madproducts.ai>** (the default `madproducts-ai.github.io/mad-studio`
+URL redirects there). The workflow reads the Pages settings through `actions/configure-pages` and passes
+the matching `--base-href`, so the build follows whatever domain is configured. The `pages` build
+configuration swaps in `environment.pages.ts` (no API URL, so the studio runs the planner in the browser
+and saves projects locally, shown as **Browser mode**), and `scripts/finalize-pages.mjs` adds `404.html`
+for deep links plus `.nojekyll`.
 
-To serve from a custom domain (for example `studio.madproducts.ai`): add a `CNAME` file with the
-domain to `apps/web/public`, change `baseHref` in the `pages` configuration to `/`, point
-`apiUrl` in `environment.pages.ts` at a hosted API, and configure the DNS record GitHub Pages asks for.
+DNS for the custom domain: a `CNAME` record for `studio` pointing at `madproducts-ai.github.io`
+(DNS-only if the zone is behind a proxy such as Cloudflare). Once the certificate is issued, enable
+"Enforce HTTPS" in Settings → Pages, or `gh api -X PUT repos/madproducts-ai/mad-studio/pages -F https_enforced=true`.
+To attach a hosted API, set `apiUrl` in `environment.pages.ts`.
 
 **API.** `npm run build:api` produces a single `apps/api/dist/main.js`; run it with `DATABASE_URL`
 set on any Node 22+ host with PostgreSQL reachable.
