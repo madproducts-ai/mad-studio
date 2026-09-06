@@ -205,10 +205,15 @@ $apiEnv = [ordered]@{
     'PLANNER_MODEL'      = $PlannerModel
     'PLANNER_EFFORT'     = $PlannerEffort
 }
-if ($AnthropicKey) { $apiEnv['ANTHROPIC_API_KEY'] = $AnthropicKey } else { Warn 'ANTHROPIC_API_KEY not set in deploy\.env.deploy: the hosted API will use the deterministic planner.' }
-# Operator-added variables in the live web.config survive a redeploy; the keys above are script-owned.
+# Always written, even when empty: an absent key would otherwise be preserved from the
+# live web.config, so clearing it in deploy\.env.deploy could never take effect. Empty
+# reads as "unset" in the API's environment schema, which disables the model planner.
+$apiEnv['ANTHROPIC_API_KEY'] = $AnthropicKey
+if (-not $AnthropicKey) { Warn 'ANTHROPIC_API_KEY not set in deploy\.env.deploy: the hosted API will use the deterministic planner.' }
+# Operator-added variables in the live web.config survive a redeploy; the keys above are
+# script-owned, and the secrets among them are never carried over from what is deployed.
 $preserved = Get-MadWebConfigEnvironment -Path (Join-Path $ApiRoot 'web.config')
-Merge-MadEnvironment -Configured $apiEnv -Preserved $preserved -Mode ConfiguredWins | Out-Null
+Merge-MadEnvironment -Configured $apiEnv -Preserved $preserved -Mode ConfiguredWins -ConfiguredOnlyKeys @('ANTHROPIC_API_KEY', 'DATABASE_URL') | Out-Null
 $envXml = ConvertTo-MadEnvironmentXml -Environment $apiEnv -Indent 10
 
 # PORT is deliberately absent: ANCM assigns the loopback port per launch (ASPNETCORE_PORT) and
