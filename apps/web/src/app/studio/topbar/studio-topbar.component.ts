@@ -31,9 +31,15 @@ import { StudioStore } from '../state/studio.store';
         {{ saveLabel().text }}
       </span>
       @if (store.mode() === 'offline') {
-        <span class="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[0.68rem] font-medium text-warning" title="The API is unreachable. Builds run in your browser and save locally.">
-          <mad-icon name="cloud-off" [size]="11" /> Offline
-        </span>
+        @if (store.apiConfigured) {
+          <span class="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[0.68rem] font-medium text-warning" title="The API is unreachable. Builds run in your browser and save locally.">
+            <mad-icon name="cloud-off" [size]="11" /> Offline
+          </span>
+        } @else {
+          <span class="inline-flex items-center gap-1 rounded-full border border-signal/40 bg-signal/10 px-2 py-0.5 text-[0.68rem] font-medium text-signal" title="This build has no API attached. Builds run in your browser and projects save locally.">
+            <mad-icon name="cpu" [size]="11" /> Browser mode
+          </span>
+        }
       }
     </div>
 

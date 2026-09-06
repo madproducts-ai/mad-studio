@@ -70,7 +70,11 @@ import { StudioStore } from '../state/studio.store';
               <mad-icon name="plus" [size]="14" /> Start with a blank canvas
             </button>
             @if (store.mode() === 'offline') {
-              <p class="mt-4 inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-[0.7rem] text-warning"><mad-icon name="cloud-off" [size]="12" /> API offline. Builds will run in your browser and save locally.</p>
+              @if (store.apiConfigured) {
+                <p class="mt-4 inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-[0.7rem] text-warning"><mad-icon name="cloud-off" [size]="12" /> API offline. Builds will run in your browser and save locally.</p>
+              } @else {
+                <p class="mt-4 inline-flex items-center gap-1.5 rounded-full border border-signal/40 bg-signal/10 px-3 py-1 text-[0.7rem] text-signal"><mad-icon name="cpu" [size]="12" /> Browser mode. Builds run in your browser and projects save locally.</p>
+              }
             }
           </div>
         }

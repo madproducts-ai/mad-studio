@@ -2,23 +2,51 @@
   "name": "MAD Studio",
   "short_name": "MAD Studio",
   "description": "AI-native platform to generate, visually edit, and deploy production-ready web and mobile applications.",
-  "id": "https://studio.madproducts.ai/",
-  "start_url": "/studio",
-  "scope": "/",
+  "id": "./",
+  "start_url": "./studio",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0B0D12",
   "theme_color": "#0B0D12",
   "lang": "en",
   "dir": "ltr",
-  "categories": ["developer tools", "productivity"],
+  "categories": [
+    "developer tools",
+    "productivity"
+  ],
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ],
   "shortcuts": [
-    { "name": "New build", "short_name": "New", "url": "/studio?new=1", "description": "Start a new prompt-to-app build" }
+    {
+      "name": "New build",
+      "short_name": "New",
+      "url": "./studio?new=1",
+      "description": "Start a new prompt-to-app build"
+    }
   ]
 }

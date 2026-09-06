@@ -123,6 +123,8 @@ export class StudioStore {
   readonly saveState = signal<SaveState>('idle');
   readonly lastSavedAt = signal<string | null>(null);
   readonly mode = signal<ConnectionMode>('unknown');
+  /** False on static deployments: the badge reads "Browser mode" instead of "Offline". */
+  readonly apiConfigured = this.api.configured;
   readonly isLocal = computed(() => (this.projectId() ?? '').startsWith('local-'));
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private saveInFlight: Promise<void> | null = null;
@@ -380,7 +382,7 @@ export class StudioStore {
     // Offline: run the planner locally, persist to this browser.
     const localId = keepProject && currentProjectId?.startsWith('local-') ? currentProjectId : `local-${Date.now().toString(36)}`;
     this.projectId.set(localId);
-    this.log('warn', 'API unreachable. Running the planner in your browser; this project is saved locally.');
+    this.log(this.apiConfigured ? 'warn' : 'info', `${this.apiConfigured ? 'API unreachable.' : 'No API configured for this build.'} Running the planner in your browser; this project is saved locally.`);
     this.genStatus.set('queued');
     this.offline = new OfflineRunner(
       text,

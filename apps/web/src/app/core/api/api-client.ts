@@ -69,8 +69,10 @@ interface RequestOptions {
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
   readonly baseUrl = environment.apiUrl.replace(/\/$/, '');
+  /** False on static hosts (GitHub Pages) where no API URL is configured; the studio then runs in browser mode. */
+  readonly configured = this.baseUrl.length > 0;
   /** Last observed reachability; the studio uses it to decide on offline mode. */
-  readonly reachable = signal<boolean | null>(null);
+  readonly reachable = signal<boolean | null>(this.configured ? null : false);
 
   async health(signal?: AbortSignal): Promise<Health> {
     return this.request('/health', HealthSchema, { retries: 1, timeoutMs: 3500, ...(signal ? { signal } : {}) });
@@ -147,6 +149,10 @@ export class ApiClient {
   }
 
   private async request<T>(path: string, schema: ZodType<T>, options: RequestOptions = {}): Promise<T> {
+    if (!this.configured) {
+      // No network round-trip, no timeout: callers fall back to browser mode immediately.
+      throw new ApiUnreachableError(new Error('No API URL is configured for this build.'));
+    }
     const method = options.method ?? 'GET';
     const retries = options.retries ?? (method === 'GET' ? 2 : 0);
     const timeoutMs = options.timeoutMs ?? 12000;
