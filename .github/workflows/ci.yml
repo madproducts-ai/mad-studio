@@ -120,6 +120,7 @@ jobs:
       - name: "Smoke: auth, generate, persist, lock, deploy"
         run: |
           set -euo pipefail
+          trap 'echo "::error::smoke failed at line $LINENO (last HTTP status: ${CODE:-n/a})"' ERR
           B=http://127.0.0.1:4100/v1
           J=/tmp/cookies.txt
           # Anonymous calls are rejected; registering sets the session cookie.
