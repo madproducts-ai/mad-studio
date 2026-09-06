@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { DesignSystem, Device } from '@mad/schema';
 import { Icon, type IconName } from '../../core/ui/icon.component';
@@ -89,7 +89,7 @@ import { StudioStore } from '../state/studio.store';
           }
         </button>
         @if (deployOpen()) {
-          <div class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" (pointerleave)="deployOpen.set(false)">
+          <div class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" role="menu">
             <button type="button" class="menu-item" (click)="deploy('preview')">
               <mad-icon name="eye" [size]="14" />
               <span><b>Preview</b><small>Immutable snapshot of v{{ store.documentVersion() }} with its own URL</small></span>
@@ -117,7 +117,7 @@ import { StudioStore } from '../state/studio.store';
               {{ auth.initials() }}
             </button>
             @if (accountOpen()) {
-              <div class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" (pointerleave)="accountOpen.set(false)">
+              <div class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" role="menu">
                 <div class="px-2.5 py-2">
                   <b class="block truncate text-[0.8rem] font-semibold text-ink">{{ store.account()?.displayName }}</b>
                   <small class="block truncate text-[0.68rem] text-ink-4">{{ store.account()?.email }}</small>
@@ -165,6 +165,7 @@ export class StudioTopbar {
   protected readonly theme = inject(ThemeService);
   protected readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly Math = Math;
   protected readonly deployOpen = signal(false);
   protected readonly accountOpen = signal(false);
@@ -229,6 +230,22 @@ export class StudioTopbar {
     } catch {
       this.toast.info('Share link', url);
     }
+  }
+
+  /** Menus close on an outside press or Escape, which works the same for mouse, touch and pen. */
+  @HostListener('document:pointerdown', ['$event'])
+  protected onDocumentPointerDown(event: PointerEvent): void {
+    if (!this.deployOpen() && !this.accountOpen()) return;
+    const target = event.target as HTMLElement | null;
+    if (target && this.host.nativeElement.contains(target) && target.closest('.menu, [aria-expanded]')) return;
+    this.deployOpen.set(false);
+    this.accountOpen.set(false);
+  }
+
+  @HostListener('document:keydown.escape')
+  protected onEscape(): void {
+    this.deployOpen.set(false);
+    this.accountOpen.set(false);
   }
 
   protected signOut(): void {
