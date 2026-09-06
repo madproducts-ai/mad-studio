@@ -8,8 +8,8 @@ const now = () => new Date().toISOString();
 
 export const DEMO_USER: User = {
   id: DEMO_USER_ID,
-  email: 'anton@madproducts.co.za',
-  displayName: 'Anton',
+  email: 'demo@madproducts.ai',
+  displayName: 'Demo',
   avatarUrl: null,
   plan: 'team',
   createdAt: now(),
