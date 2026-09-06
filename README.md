@@ -1,5 +1,7 @@
 # MAD Studio
 
+[![CI](https://github.com/madproducts-ai/mad-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/madproducts-ai/mad-studio/actions/workflows/ci.yml)
+
 **Prompt to production in under 60 seconds.**
 studio.madproducts.ai · AI-native platform to generate, visually edit, and deploy production-ready web and mobile applications.
 
@@ -58,7 +60,7 @@ npm run dev:api
 | `npm run dev:web` / `npm run dev:api` | Dev servers with watch |
 | `npm run build` | Production builds for every workspace (`apps/web/dist`, `apps/api/dist/main.js`) |
 | `npm run typecheck` | Strict TypeScript across all workspaces |
-| `npm test` | Vitest (planner: intents, determinism, replay, presets) |
+| `npm test` | Vitest across planner, api and web (Angular unit-test builder) |
 | `npm run media:build` | Rasterise brand SVGs into favicon, icons, OG image |
 
 ## API surface (`/v1`)

@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  NG_CLI_ANALYTICS: 'false'
+
+jobs:
+  verify:
+    name: Typecheck · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck (all workspaces)
+        run: npm run typecheck
+
+      - name: Unit tests (planner, api, web)
+        run: npm test
+
+      - name: Build (web production, api bundle)
+        run: npm run build
+
+      # Rasterised output depends on the runner's installed fonts, so this proves the
+      # pipeline runs rather than diffing pixels against the committed assets.
+      - name: Media pipeline runs
+        run: npm run media:build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist/web/browser
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-dist
+          path: apps/api/dist
+          retention-days: 7
+
+  database:
+    name: PostgreSQL · migrate · seed · smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: verify
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mad
+          POSTGRES_PASSWORD: mad
+          POSTGRES_DB: mad_studio
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U mad -d mad_studio"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://mad:mad@127.0.0.1:5432/mad_studio
+      PORT: 4100
+      GENERATION_PACE: '0'
+      LOG_LEVEL: warn
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Migrate (twice, second run must be a no-op)
+        run: |
+          npm run db:migrate
+          npm run db:migrate | tee /tmp/second.log
+          grep -q "database is up to date" /tmp/second.log
+
+      - name: Seed (idempotent)
+        run: |
+          npm run db:seed
+          npm run db:seed
+
+      - name: Build API bundle
+        run: npm run build:api
+
+      - name: Boot API against PostgreSQL
+        run: |
+          node apps/api/dist/main.js > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4100/v1/health > /tmp/health.json 2>/dev/null; then break; fi
+            sleep 1
+          done
+          cat /tmp/health.json
+          node -e "const h=require('/tmp/health.json'); if (h.storage !== 'postgres' || !h.storageReachable) { console.error('API is not on PostgreSQL'); process.exit(1); }"
+
+      - name: Smoke: generate, persist, lock, deploy
+        run: |
+          set -euo pipefail
+          B=http://127.0.0.1:4100/v1
+          GEN=$(curl -fsS -X POST "$B/generations" -H 'content-type: application/json' \
+            -d '{"prompt":"Build an internal CRM dashboard with Stripe billing and a customer support chat"}')
+          ID=$(node -e "console.log(JSON.parse(process.argv[1]).id)" "$GEN")
+          PROJ=$(node -e "console.log(JSON.parse(process.argv[1]).projectId)" "$GEN")
+          # Pace 0 finishes almost immediately; poll for the terminal state anyway.
+          for i in $(seq 1 30); do
+            STATUS=$(curl -fsS "$B/generations/$ID" | node -e "process.stdin.on('data',d=>console.log(JSON.parse(d).status))")
+            [ "$STATUS" = "complete" ] && break
+            sleep 1
+          done
+          [ "$STATUS" = "complete" ] || (echo "::error::generation ended as $STATUS"; cat /tmp/api.log; exit 1)
+          DOC=$(curl -fsS "$B/projects/$PROJ/document")
+          node -e "const d=JSON.parse(process.argv[1]); if (d.version!==1||d.authoredBy!=='ai'||d.document.tables.length<1) { console.error(d); process.exit(1); } console.log('document v1 with', d.document.tables.length, 'tables')" "$DOC"
+          STALE=$(node -e "const d=JSON.parse(process.argv[1]); console.log(JSON.stringify({baseVersion:0, document:d.document}))" "$DOC")
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$B/projects/$PROJ/document" -H 'content-type: application/json' --data-binary "$STALE")
+          [ "$CODE" = "409" ] || (echo "::error::expected 409 on stale save, got $CODE"; exit 1)
+          echo "optimistic lock: 409 as expected"
+          curl -fsS -X POST "$B/projects/$PROJ/deployments" -H 'content-type: application/json' -d '{"target":"preview"}' > /dev/null
+          echo "smoke passed"
+
+      - name: API log on failure
+        if: failure()
+        run: cat /tmp/api.log || true
