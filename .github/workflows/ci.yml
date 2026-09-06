@@ -117,7 +117,7 @@ jobs:
           cat /tmp/health.json
           node -e "const h=require('/tmp/health.json'); if (h.storage !== 'postgres' || !h.storageReachable) { console.error('API is not on PostgreSQL'); process.exit(1); }"
 
-      - name: Smoke: generate, persist, lock, deploy
+      - name: "Smoke: generate, persist, lock, deploy"
         run: |
           set -euo pipefail
           B=http://127.0.0.1:4100/v1
