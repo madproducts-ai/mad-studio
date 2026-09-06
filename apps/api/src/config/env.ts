@@ -2,6 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 
+const optionalString = () =>
+  z
+    .string()
+    .optional()
+    .transform((s) => (s && s.trim().length > 0 ? s.trim() : undefined));
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4100),
@@ -10,13 +16,25 @@ const EnvSchema = z.object({
     .string()
     .default('http://localhost:4200')
     .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
-  DATABASE_URL: z
-    .string()
-    .optional()
-    .transform((s) => (s && s.trim().length > 0 ? s.trim() : undefined))
-    .pipe(z.string().url().optional()),
+  DATABASE_URL: optionalString().pipe(z.string().url().optional()),
   GENERATION_PACE: z.coerce.number().min(0).max(10).default(1),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+
+  // Authentication
+  SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  /** Optional: gives the seeded demo account a password so its owner can sign in. */
+  SEED_ADMIN_EMAIL: optionalString().pipe(z.string().email().optional()),
+  SEED_ADMIN_PASSWORD: optionalString().pipe(z.string().min(10).optional()),
+
+  // Model-backed planner (falls back to the heuristic planner when unset)
+  ANTHROPIC_API_KEY: optionalString(),
+  PLANNER_MODEL: z.string().min(1).default('claude-opus-5'),
+  PLANNER_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
+  PLANNER_TIMEOUT_MS: z.coerce.number().int().min(5000).max(120000).default(45000),
+
+  // Deployments: where exported sites are written and how they are reached
+  DEPLOY_EXPORT_ROOT: optionalString(),
+  DEPLOY_PUBLIC_BASE: optionalString().pipe(z.string().url().optional()),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

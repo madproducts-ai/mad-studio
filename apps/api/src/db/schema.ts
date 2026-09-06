@@ -1,12 +1,13 @@
 import { relations, sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import type { MadDocument, GenerationEvent } from '@mad/schema';
 
 /**
- * PostgreSQL schema for MAD Studio. Mirrors packages/schema/src/entities.ts.
- * Conventions: uuid primary keys, snake_case columns, timestamptz everywhere,
- * ON DELETE CASCADE from workspace → project → children, and a composite
- * primary key on (project_id, version) for the append-only document log.
+ * PostgreSQL schema for MAD Studio. Mirrors packages/schema/src/entities.ts and
+ * packages/schema/src/auth.ts. Conventions: uuid primary keys, snake_case
+ * columns, timestamptz everywhere, ON DELETE CASCADE from workspace → project →
+ * children, and a composite primary key on (project_id, version) for the
+ * append-only document log. Migrations live in apps/api/drizzle/*.sql.
  */
 
 export const planEnum = pgEnum('plan', ['free', 'pro', 'team', 'enterprise']);
@@ -31,9 +32,30 @@ export const users = pgTable(
     displayName: text('display_name').notNull(),
     avatarUrl: text('avatar_url'),
     plan: planEnum('plan').notNull().default('free'),
+    passwordHash: text('password_hash'),
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     ...timestamps,
   },
   (t) => [uniqueIndex('users_email_key').on(sql`lower(${t.email})`)],
+);
+
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [uniqueIndex('sessions_token_hash_key').on(t.tokenHash), index('sessions_user_idx').on(t.userId), index('sessions_expires_idx').on(t.expiresAt)],
 );
 
 export const workspaces = pgTable(
@@ -165,7 +187,8 @@ export const deployments = pgTable(
   (t) => [index('deployments_project_created_idx').on(t.projectId, t.createdAt)],
 );
 
-export const usersRelations = relations(users, ({ many }) => ({ workspaces: many(workspaces) }));
+export const usersRelations = relations(users, ({ many }) => ({ workspaces: many(workspaces), sessions: many(sessions) }));
+export const sessionsRelations = relations(sessions, ({ one }) => ({ user: one(users, { fields: [sessions.userId], references: [users.id] }) }));
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   owner: one(users, { fields: [workspaces.ownerId], references: [users.id] }),
   projects: many(projects),
@@ -184,6 +207,7 @@ export const generationsRelations = relations(generations, ({ one, many }) => ({
 
 export const schema = {
   users,
+  sessions,
   workspaces,
   projects,
   projectDocuments,
@@ -193,10 +217,8 @@ export const schema = {
   projectIntegrations,
   deployments,
   usersRelations,
+  sessionsRelations,
   workspacesRelations,
   projectsRelations,
   generationsRelations,
 };
-
-export const isDocumentRow = (row: unknown): row is { document: MadDocument } => typeof row === 'object' && row !== null && 'document' in row;
-export const booleanColumn = boolean;

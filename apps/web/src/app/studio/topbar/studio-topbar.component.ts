@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import type { DesignSystem, Device } from '@mad/schema';
 import { Icon, type IconName } from '../../core/ui/icon.component';
 import { ThemeService } from '../../core/theme/theme.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { StudioStore } from '../state/studio.store';
 
@@ -91,11 +92,11 @@ import { StudioStore } from '../state/studio.store';
           <div class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" (pointerleave)="deployOpen.set(false)">
             <button type="button" class="menu-item" (click)="deploy('preview')">
               <mad-icon name="eye" [size]="14" />
-              <span><b>Preview</b><small>Shareable URL, expires in 7 days</small></span>
+              <span><b>Preview</b><small>Immutable snapshot of v{{ store.documentVersion() }} with its own URL</small></span>
             </button>
             <button type="button" class="menu-item" (click)="deploy('production')">
               <mad-icon name="globe" [size]="14" />
-              <span><b>Production</b><small>{{ store.project()?.slug || 'project' }}.madproducts.app</small></span>
+              <span><b>Production</b><small class="mono truncate">{{ productionHost() }}</small></span>
             </button>
             @if (store.deployments().length) {
               <div class="my-1 h-px bg-line"></div>
@@ -109,6 +110,33 @@ import { StudioStore } from '../state/studio.store';
           </div>
         }
       </div>
+      @if (store.apiConfigured && store.mode() === 'api') {
+        <div class="relative ml-1">
+          @if (store.signedIn()) {
+            <button type="button" class="avatar" (click)="accountOpen.set(!accountOpen())" [attr.aria-expanded]="accountOpen()" aria-label="Account menu" [title]="store.account()?.email ?? 'Account'">
+              {{ auth.initials() }}
+            </button>
+            @if (accountOpen()) {
+              <div class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" (pointerleave)="accountOpen.set(false)">
+                <div class="px-2.5 py-2">
+                  <b class="block truncate text-[0.8rem] font-semibold text-ink">{{ store.account()?.displayName }}</b>
+                  <small class="block truncate text-[0.68rem] text-ink-4">{{ store.account()?.email }}</small>
+                  <small class="mt-1 block truncate text-[0.68rem] text-ink-3">Workspace · {{ auth.workspace()?.name }}</small>
+                </div>
+                <div class="my-1 h-px bg-line"></div>
+                <button type="button" class="menu-item" (click)="signOut()">
+                  <mad-icon name="cloud-off" [size]="14" />
+                  <span><b>Sign out</b><small>Local projects stay on this device</small></span>
+                </button>
+              </div>
+            }
+          } @else {
+            <button type="button" class="btn btn-ghost btn-sm gap-1.5" (click)="store.signIn()">
+              <mad-icon name="shield-check" [size]="14" /> Sign in
+            </button>
+          }
+        </div>
+      }
     </div>
   `,
   styles: `
@@ -127,15 +155,19 @@ import { StudioStore } from '../state/studio.store';
     .menu-item b { font-size: 0.8rem; font-weight: 600; }
     .menu-item small { font-size: 0.68rem; color: var(--mad-ink-4); }
     .menu { animation: menu-in 0.35s var(--ease-spring) both; transform-origin: top right; }
+    .avatar { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 999px; background: linear-gradient(135deg, var(--mad-signal), var(--mad-ember)); color: var(--mad-signal-ink); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; box-shadow: inset 0 0 0 1px color-mix(in oklab, white 25%, transparent); transition: transform 0.4s var(--ease-spring); }
+    .avatar:hover { transform: scale(1.06); }
     @keyframes menu-in { from { opacity: 0; transform: scale(0.96) translateY(-4px); } }
   `,
 })
 export class StudioTopbar {
   protected readonly store = inject(StudioStore);
   protected readonly theme = inject(ThemeService);
+  protected readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   protected readonly Math = Math;
   protected readonly deployOpen = signal(false);
+  protected readonly accountOpen = signal(false);
 
   protected readonly devices: ReadonlyArray<{ id: Device; label: string; icon: IconName; key: string }> = [
     { id: 'desktop', label: 'Desktop 1440', icon: 'monitor', key: '1' },
@@ -149,6 +181,15 @@ export class StudioTopbar {
     { id: 'wordpress', label: 'WordPress' },
   ];
   protected readonly systemLabel = computed(() => this.systems.find((s) => s.id === this.store.designSystem())?.label ?? 'Tailwind');
+  /** Where a production deploy lands, from the API's health report. */
+  protected readonly productionHost = computed(() => {
+    const base = this.store.health()?.deploy?.publicBase ?? null;
+    const slug = this.store.project()?.slug ?? 'project';
+    const short = (this.store.projectId() ?? '').slice(0, 6);
+    if (!base) return `${slug}-${short || 'xxxxxx'}/ on the API's local export root`;
+    return `${base.replace(/^https?:\/\//, '')}/${slug}-${short || 'xxxxxx'}/`;
+  });
+
   protected readonly zoomLabel = computed(() => {
     const z = this.store.zoom();
     return z === 'fit' ? 'Fit' : `${Math.round(z * 100)}%`;
@@ -188,6 +229,11 @@ export class StudioTopbar {
     } catch {
       this.toast.info('Share link', url);
     }
+  }
+
+  protected signOut(): void {
+    this.accountOpen.set(false);
+    void this.store.signOut();
   }
 
   protected deploy(target: 'preview' | 'production'): void {

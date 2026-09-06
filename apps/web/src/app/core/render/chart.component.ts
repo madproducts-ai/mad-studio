@@ -1,19 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { hashSeed, rng, series } from './fake-data';
-
-type ChartKind = 'line' | 'bar' | 'area' | 'donut';
-
-interface Layer {
-  path: string;
-  area: string;
-  color: string;
-  last: number;
-}
+import { CHART_H, CHART_W, chartBars, chartDonut, chartLayers, type ChartKind } from '@mad/export';
 
 /**
- * Dependency-free SVG charts. Seeded from the node id so data is stable. Series
- * colours cycle through ember, signal, and a neutral so a chart never uses the
- * same hue twice.
+ * Dependency-free SVG charts. Geometry comes from @mad/export (seeded from the
+ * node id), so the canvas and the deployed page draw the same chart.
  */
 @Component({
   selector: 'mad-chart',
@@ -85,49 +75,11 @@ export class Chart {
   readonly labels = input<string[]>(['Series A']);
   readonly points = input<number>(12);
 
-  protected readonly W = 320;
-  protected readonly H = 120;
+  protected readonly W = CHART_W;
+  protected readonly H = CHART_H;
   protected readonly uid = Math.random().toString(36).slice(2, 7);
-  private readonly palette = ['var(--r-accent)', 'var(--r-live)', 'var(--r-ink-3)', 'var(--r-success)'];
 
-  protected readonly layers = computed<Layer[]>(() => {
-    const r = rng(hashSeed(this.seed()));
-    const n = Math.max(2, this.points());
-    return this.labels().slice(0, 4).map((_, i) => {
-      const data = series(r, n, i === 0 ? 0.6 : 0.2 - i * 0.15);
-      const step = this.W / (n - 1);
-      const pts = data.map((v, j) => [j * step, this.H - v * (this.H - 8) - 2] as const);
-      const path = pts.map(([x, y], j) => `${j === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
-      const area = `${path} L${this.W} ${this.H} L0 ${this.H} Z`;
-      return { path, area, color: this.palette[i % this.palette.length] as string, last: data[n - 1] ?? 0 };
-    });
-  });
-
-  protected readonly bars = computed(() => {
-    const r = rng(hashSeed(this.seed()));
-    const n = Math.max(2, Math.min(this.points(), 16));
-    const values = series(r, n, -0.7);
-    const gap = 6;
-    const w = (this.W - gap * (n - 1)) / n;
-    return values.map((v, i) => {
-      const h = v * (this.H - 6);
-      return { x: i * (w + gap), y: this.H - h, w, h, color: i === 0 ? 'var(--r-accent)' : 'var(--r-bar)' };
-    });
-  });
-
-  protected readonly donut = computed(() => {
-    const r = rng(hashSeed(this.seed()));
-    const labels = this.labels().slice(0, 4);
-    const raw = labels.map(() => 0.2 + r());
-    const total = raw.reduce((a, b) => a + b, 0);
-    const circ = 2 * Math.PI * 46;
-    let offset = 0;
-    return labels.map((label, i) => {
-      const frac = (raw[i] ?? 0) / total;
-      const len = frac * circ;
-      const seg = { label, color: this.palette[i % this.palette.length] as string, dash: `${len.toFixed(2)} ${(circ - len).toFixed(2)}`, offset: (-offset).toFixed(2), pct: Math.round(frac * 100) };
-      offset += len;
-      return seg;
-    });
-  });
+  protected readonly layers = computed(() => chartLayers(this.seed(), this.labels(), this.points()));
+  protected readonly bars = computed(() => chartBars(this.seed(), this.points()));
+  protected readonly donut = computed(() => chartDonut(this.seed(), this.labels()));
 }

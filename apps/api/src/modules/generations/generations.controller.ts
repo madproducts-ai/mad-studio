@@ -21,18 +21,18 @@ export class GenerationsController {
   }
 
   @Get()
-  list(@Query(zodBody(ListQuerySchema)) query: z.infer<typeof ListQuerySchema>) {
-    return this.generations.listForProject(query.projectId, query.limit);
+  list(@CurrentPrincipal() principal: Principal, @Query(zodBody(ListQuerySchema)) query: z.infer<typeof ListQuerySchema>) {
+    return this.generations.listForProject(principal.workspace.id, query.projectId, query.limit);
   }
 
   @Get(':id')
-  get(@Param('id', zodBody(IdSchema)) id: string) {
-    return this.generations.get(id);
+  get(@CurrentPrincipal() principal: Principal, @Param('id', zodBody(IdSchema)) id: string) {
+    return this.generations.get(principal.workspace.id, id);
   }
 
   @Post(':id/cancel')
-  cancel(@Param('id', zodBody(IdSchema)) id: string) {
-    return this.generations.cancel(id);
+  cancel(@CurrentPrincipal() principal: Principal, @Param('id', zodBody(IdSchema)) id: string) {
+    return this.generations.cancel(principal.workspace.id, id);
   }
 
   /**
@@ -41,13 +41,14 @@ export class GenerationsController {
    */
   @Sse(':id/events')
   events(
+    @CurrentPrincipal() principal: Principal,
     @Param('id', zodBody(IdSchema)) id: string,
     @Headers('last-event-id') lastEventId: string | undefined,
     @Query(zodBody(AfterQuerySchema)) query: z.infer<typeof AfterQuerySchema>,
   ): Observable<MessageEvent> {
     const fromHeader = lastEventId !== undefined ? Number.parseInt(lastEventId, 10) : Number.NaN;
     const after = Number.isFinite(fromHeader) ? fromHeader : query.after;
-    return this.generations.stream(id, after).pipe(
+    return this.generations.stream(principal.workspace.id, id, after).pipe(
       map((event): MessageEvent => ({ id: String(event.seq), type: event.type, data: event, retry: 1500 })),
     );
   }

@@ -1,0 +1,23 @@
+{
+  "name": "@mad/export",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static site renderer for MAD documents. Turns a MadDocument into a self-contained HTML page that matches the studio canvas pixel for pixel, plus the deterministic sample data both share.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mad/schema": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0",
+    "vitest": "^4.0.8"
+  }
+}

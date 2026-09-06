@@ -1,15 +1,25 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, gt, ne, sql } from 'drizzle-orm';
-import type { Deployment, GenerationEvent, GenerationSummary, Integration, IntegrationCategory, MadDocument, Project, ProjectDocument, ProjectIntegration, User, Workspace } from '@mad/schema';
+import { and, asc, desc, eq, gt, isNull, ne, sql } from 'drizzle-orm';
+import type { Deployment, GenerationEvent, GenerationSummary, Integration, IntegrationCategory, MadDocument, Project, ProjectDocument, ProjectIntegration, Session, User, Workspace } from '@mad/schema';
 import { ConflictError, NotFoundError } from '../common/errors';
 import { withRetry } from '../common/retry';
 import type { Database } from '../db/client';
-import { deployments, generationEvents, generations, integrations, projectDocuments, projectIntegrations, projects, users, workspaces } from '../db/schema';
+import { deployments, generationEvents, generations, integrations, projectDocuments, projectIntegrations, projects, sessions, users, workspaces } from '../db/schema';
 import type { GenerationCompletion, Repository } from './repository';
 
 const iso = (d: Date) => d.toISOString();
 
 const mapUser = (r: typeof users.$inferSelect): User => ({ id: r.id, email: r.email, displayName: r.displayName, avatarUrl: r.avatarUrl, plan: r.plan, createdAt: iso(r.createdAt), updatedAt: iso(r.updatedAt) });
+const mapSession = (r: typeof sessions.$inferSelect): Session => ({
+  id: r.id,
+  userId: r.userId,
+  createdAt: iso(r.createdAt),
+  expiresAt: iso(r.expiresAt),
+  lastSeenAt: iso(r.lastSeenAt),
+  ip: r.ip,
+  userAgent: r.userAgent,
+  revokedAt: r.revokedAt ? iso(r.revokedAt) : null,
+});
 const mapWorkspace = (r: typeof workspaces.$inferSelect): Workspace => ({ id: r.id, ownerId: r.ownerId, name: r.name, slug: r.slug, createdAt: iso(r.createdAt), updatedAt: iso(r.updatedAt) });
 const mapProject = (r: typeof projects.$inferSelect): Project => ({
   id: r.id,
@@ -55,6 +65,8 @@ const isTransient = (error: unknown): boolean => {
   return ['57P01', '57P02', '57P03', '08000', '08003', '08006', 'ECONNRESET', 'ETIMEDOUT'].includes(code);
 };
 
+const isUniqueViolation = (error: unknown): boolean => (error as { code?: string } | null)?.code === '23505';
+
 export class PgRepository implements Repository {
   readonly kind = 'postgres' as const;
 
@@ -75,12 +87,81 @@ export class PgRepository implements Repository {
 
   readonly users: Repository['users'] = {
     findById: (id) => this.run(async () => (await this.db.select().from(users).where(eq(users.id, id)).limit(1)).map(mapUser)[0] ?? null),
+    findByEmail: (email) =>
+      this.run(async () => (await this.db.select().from(users).where(sql`lower(${users.email}) = ${email.trim().toLowerCase()}`).limit(1)).map(mapUser)[0] ?? null),
+    create: (input) =>
+      this.run(async () => {
+        try {
+          const [row] = await this.db
+            .insert(users)
+            .values({ email: input.email.trim().toLowerCase(), displayName: input.displayName, passwordHash: input.passwordHash })
+            .returning();
+          if (!row) throw new Error('insert returned no row');
+          return mapUser(row);
+        } catch (error) {
+          if (isUniqueViolation(error)) throw new ConflictError('An account with this email already exists.', { email: input.email });
+          throw error;
+        }
+      }),
+    getPasswordHash: (id) => this.run(async () => (await this.db.select({ hash: users.passwordHash }).from(users).where(eq(users.id, id)).limit(1))[0]?.hash ?? null),
+    setPassword: (id, passwordHash) =>
+      this.run(async () => {
+        const rows = await this.db.update(users).set({ passwordHash }).where(eq(users.id, id)).returning({ id: users.id });
+        if (rows.length === 0) throw new NotFoundError('User', id);
+      }),
+    touchLogin: (id) =>
+      this.run(async () => {
+        await this.db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, id));
+      }),
+  };
+
+  readonly sessions: Repository['sessions'] = {
+    create: (input) =>
+      this.run(async () => {
+        const [row] = await this.db
+          .insert(sessions)
+          .values({ userId: input.userId, tokenHash: input.tokenHash, expiresAt: new Date(input.expiresAt), ip: input.ip, userAgent: input.userAgent })
+          .returning();
+        if (!row) throw new Error('insert returned no row');
+        return mapSession(row);
+      }),
+    findActiveByTokenHash: (tokenHash) =>
+      this.run(
+        async () =>
+          (await this.db.select().from(sessions).where(and(eq(sessions.tokenHash, tokenHash), isNull(sessions.revokedAt), gt(sessions.expiresAt, new Date()))).limit(1)).map(mapSession)[0] ?? null,
+      ),
+    touch: (id, lastSeenAt, expiresAt) =>
+      this.run(async () => {
+        await this.db.update(sessions).set({ lastSeenAt: new Date(lastSeenAt), expiresAt: new Date(expiresAt) }).where(eq(sessions.id, id));
+      }),
+    revoke: (id) =>
+      this.run(async () => {
+        await this.db.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.id, id), isNull(sessions.revokedAt)));
+      }),
+    revokeAllForUser: (userId, exceptId) =>
+      this.run(async () => {
+        const where = exceptId ? and(eq(sessions.userId, userId), ne(sessions.id, exceptId), isNull(sessions.revokedAt)) : and(eq(sessions.userId, userId), isNull(sessions.revokedAt));
+        const rows = await this.db.update(sessions).set({ revokedAt: new Date() }).where(where).returning({ id: sessions.id });
+        return rows.length;
+      }),
   };
 
   readonly workspaces: Repository['workspaces'] = {
     findById: (id) => this.run(async () => (await this.db.select().from(workspaces).where(eq(workspaces.id, id)).limit(1)).map(mapWorkspace)[0] ?? null),
     findDefaultForUser: (userId) =>
       this.run(async () => (await this.db.select().from(workspaces).where(eq(workspaces.ownerId, userId)).orderBy(asc(workspaces.createdAt)).limit(1)).map(mapWorkspace)[0] ?? null),
+    create: (ownerId, name, slug) =>
+      this.run(async () => {
+        try {
+          const [row] = await this.db.insert(workspaces).values({ ownerId, name, slug }).returning();
+          if (!row) throw new Error('insert returned no row');
+          return mapWorkspace(row);
+        } catch (error) {
+          if (isUniqueViolation(error)) throw new ConflictError(`Workspace slug "${slug}" is taken.`, { slug });
+          throw error;
+        }
+      }),
+    slugExists: (slug) => this.run(async () => (await this.db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.slug, slug)).limit(1)).length > 0),
   };
 
   readonly projects: Repository['projects'] = {
@@ -88,8 +169,8 @@ export class PgRepository implements Repository {
       this.run(async () => {
         const where = and(eq(projects.workspaceId, workspaceId), ne(projects.status, 'archived'));
         const [{ count }] = (await this.db.select({ count: sql<number>`count(*)::int` }).from(projects).where(where)) as [{ count: number }];
-        const rows = await this.db.select().from(projects).where(where).orderBy(desc(projects.updatedAt), desc(projects.id)).limit(options.limit + 1).offset(options.cursor ? Number.parseInt(options.cursor, 10) || 0 : 0);
         const offset = options.cursor ? Number.parseInt(options.cursor, 10) || 0 : 0;
+        const rows = await this.db.select().from(projects).where(where).orderBy(desc(projects.updatedAt), desc(projects.id)).limit(options.limit + 1).offset(offset);
         const items = rows.slice(0, options.limit).map(mapProject);
         return { items, nextCursor: rows.length > options.limit ? String(offset + options.limit) : null, total: count };
       }),
@@ -104,7 +185,7 @@ export class PgRepository implements Repository {
           if (!row) throw new Error('insert returned no row');
           return mapProject(row);
         } catch (error) {
-          if ((error as { code?: string }).code === '23505') {
+          if (isUniqueViolation(error)) {
             throw new ConflictError(`A project with slug "${input.slug}" already exists in this workspace.`, { slug: input.slug });
           }
           throw error;
@@ -185,7 +266,7 @@ export class PgRepository implements Repository {
         try {
           await this.db.insert(generationEvents).values(events.map((e) => ({ generationId: id, seq: e.seq, type: e.type, payload: e, at: new Date(e.at) })));
         } catch (error) {
-          if ((error as { code?: string }).code === '23505') throw new ConflictError(`Duplicate event seq for generation ${id}.`);
+          if (isUniqueViolation(error)) throw new ConflictError(`Duplicate event seq for generation ${id}.`);
           throw error;
         }
       }),

@@ -59,7 +59,7 @@ if (Test-Path $envFile) {
         [Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim(), 'Process')
     }
 }
-$__required = @('MAD_STUDIO_DB_PASSWORD')
+$__required = @('MAD_STUDIO_DB_PASSWORD', 'MAD_STUDIO_ADMIN_PASSWORD')
 $__missing  = $__required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
 if ($__missing) { throw "Missing deploy secret(s): $($__missing -join ', '). Set them in the untracked  deploy\.env.deploy  (copy deploy\.env.deploy.example)." }
 
@@ -108,6 +108,20 @@ $DbName      = 'mad_studio'
 $DbPassword  = $env:MAD_STUDIO_DB_PASSWORD
 if ($DbPassword -notmatch '^[A-Za-z0-9]{16,}$') { throw 'MAD_STUDIO_DB_PASSWORD must be at least 16 alphanumeric characters (it is embedded in a URL).' }
 $DatabaseUrl = "postgres://${DbUser}:${DbPassword}@127.0.0.1:5432/${DbName}"
+
+# Owner account seeded into the database (password re-hashed on every deploy).
+$AdminEmail    = if ([string]::IsNullOrWhiteSpace($env:MAD_STUDIO_ADMIN_EMAIL)) { 'demo@madproducts.ai' } else { $env:MAD_STUDIO_ADMIN_EMAIL.Trim() }
+$AdminPassword = $env:MAD_STUDIO_ADMIN_PASSWORD
+if ($AdminPassword.Length -lt 10) { throw 'MAD_STUDIO_ADMIN_PASSWORD must be at least 10 characters.' }
+
+# Optional model-backed planner. Empty key = deterministic planner only.
+$AnthropicKey  = if ($null -eq $env:ANTHROPIC_API_KEY) { '' } else { $env:ANTHROPIC_API_KEY.Trim() }
+$PlannerModel  = if ([string]::IsNullOrWhiteSpace($env:PLANNER_MODEL))  { 'claude-opus-5' } else { $env:PLANNER_MODEL.Trim() }
+$PlannerEffort = if ([string]::IsNullOrWhiteSpace($env:PLANNER_EFFORT)) { 'medium' } else { $env:PLANNER_EFFORT.Trim() }
+
+# Deployed sites: rendered by the API into the FE site root under /apps, served by IIS as static files.
+$AppsRoot      = Join-Path $FeRoot 'apps'
+$AppsPublicUrl = "https://$FeHost/apps"
 
 # --- 1. Build FE -------------------------------------------------------------------------------------
 if (-not $SkipBuild) {
@@ -165,9 +179,12 @@ Ok "API runtime staged ($($runtimeDeps.Count) packages)"
 if (-not $SkipMigrate) {
     Step 'Applying database migrations + seed (PostgreSQL mad_studio)'
     $env:DATABASE_URL = $DatabaseUrl      # real environment wins over apps\api\.env inside the migrator
+    $env:SEED_ADMIN_EMAIL = $AdminEmail
+    $env:SEED_ADMIN_PASSWORD = $AdminPassword
     Invoke-Native -Label 'db:migrate' -CommandLine 'npm run db:migrate --workspace apps/api' -WorkingDirectory $AppDir
     Invoke-Native -Label 'db:seed'    -CommandLine 'npm run db:seed --workspace apps/api'    -WorkingDirectory $AppDir
-    Ok 'Database migrated + seeded'
+    $env:SEED_ADMIN_PASSWORD = $null
+    Ok "Database migrated + seeded (owner account $AdminEmail)"
 }
 
 # --- 4. web.config (FE SPA rewrite + API AspNetCoreModuleV2 out-of-process launching node) --------
@@ -182,7 +199,13 @@ $apiEnv = [ordered]@{
     'CORS_ORIGINS'    = "https://$FeHost"
     'LOG_LEVEL'       = 'info'
     'GENERATION_PACE' = '1'
+    'SESSION_TTL_DAYS'   = '30'
+    'DEPLOY_EXPORT_ROOT' = $AppsRoot
+    'DEPLOY_PUBLIC_BASE' = $AppsPublicUrl
+    'PLANNER_MODEL'      = $PlannerModel
+    'PLANNER_EFFORT'     = $PlannerEffort
 }
+if ($AnthropicKey) { $apiEnv['ANTHROPIC_API_KEY'] = $AnthropicKey } else { Warn 'ANTHROPIC_API_KEY not set in deploy\.env.deploy: the hosted API will use the deterministic planner.' }
 # Operator-added variables in the live web.config survive a redeploy; the keys above are script-owned.
 $preserved = Get-MadWebConfigEnvironment -Path (Join-Path $ApiRoot 'web.config')
 Merge-MadEnvironment -Configured $apiEnv -Preserved $preserved -Mode ConfiguredWins | Out-Null
@@ -252,6 +275,13 @@ $feWebConfig = @'
       </staticContent>
     </system.webServer>
   </location>
+  <!-- Sites published by the Deploy button live under /apps and are replaced in place: never cache. -->
+  <location path="apps">
+    <system.webServer>
+      <staticContent><clientCache cacheControlMode="DisableCache" /></staticContent>
+      <defaultDocument enabled="true"><files><clear /><add value="index.html" /></files></defaultDocument>
+    </system.webServer>
+  </location>
   <!-- Un-hashed assets: short cache so brand updates propagate within a day. -->
   <location path="brand">
     <system.webServer><staticContent><clientCache cacheControlMode="UseMaxAge" cacheControlMaxAge="1.00:00:00" /></staticContent></system.webServer>
@@ -303,8 +333,9 @@ try {
 
 # --- 6. Sync FE dist -> site root + web.config ------------------------------------------------------
 Step "Syncing FE dist -> $FeRoot"
+New-Item -ItemType Directory -Force -Path $AppsRoot | Out-Null
 Invoke-MadRobocopy -Source $FeDist -Destination $FeRoot `
-    -Arguments @('/MIR', '/XF', 'web.config', '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/R:2', '/W:2') | Out-Null
+    -Arguments @('/MIR', '/XD', 'apps', '/XF', 'web.config', '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/R:2', '/W:2') | Out-Null
 Write-MadWebConfig -Path (Join-Path $FeRoot 'web.config') -Xml $feWebConfig
 Ok 'FE synced + web.config written'
 
@@ -345,13 +376,13 @@ try {
     Ok "FE ACL set ($FePool ReadAndExecute)"
 } catch { Warn "FE ACL: $_" }
 try {
-    foreach ($d in @($ApiRoot, "D:\madproducts-data\$Slug", "D:\madproducts-backups\$Slug")) {
+    foreach ($d in @($ApiRoot, $AppsRoot, "D:\madproducts-data\$Slug", "D:\madproducts-backups\$Slug")) {
         New-Item -ItemType Directory -Force -Path $d | Out-Null
         $acl = Get-Acl $d
         $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("IIS AppPool\$ApiPool", 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
         Set-Acl $d $acl
     }
-    Ok "API ACLs set ($ApiPool Modify)"
+    Ok "API ACLs set ($ApiPool Modify, incl. $AppsRoot)"
 } catch { Warn "API ACL: $_" }
 
 # --- 10. HTTPS bindings (per-port cert + 443 SNI host cert) ------------------------------------------
@@ -407,6 +438,12 @@ try {
         throw "API health is not production/postgres: $healthJson"
     }
     Ok "API  storage=$($health.storage) reachable=$($health.storageReachable) env=$($health.env) version=$($health.version)"
+    if ($health.deploy.mode -ne 'fleet' -or $health.deploy.publicBase -ne $AppsPublicUrl) { throw "API deploy target is not the fleet apps root: $healthJson" }
+    Ok "API  planner=$($health.planner.mode)$(if ($health.planner.model) { " ($($health.planner.model))" }) deploys=$($health.deploy.publicBase)"
+    # Auth must be enforced: an anonymous project list is a 401, not the seeded workspace.
+    $anon = & curl.exe -sk -o NUL -w '%{http_code}' --max-time 30 "https://127.0.0.1:$ApiPort/v1/projects"
+    if ($anon -ne '401') { throw "Expected 401 for anonymous /v1/projects, got $anon" }
+    Ok 'API  anonymous access rejected (401)'
 } catch {
     $log = Get-ChildItem (Join-Path $ApiRoot 'logs\stdout*') -EA SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($log) { Write-Host "---- $($log.FullName) (tail) ----" -ForegroundColor Yellow; Get-Content $log.FullName -Tail 40 | Write-Host }
@@ -417,3 +454,5 @@ Write-Host ''
 Write-Host 'Done. Public URLs (via Cloudflare/443 SNI):' -ForegroundColor Cyan
 Write-Host "  FE : https://$FeHost   (origin https://209.58.145.5:$FePort, loopback check only)"
 Write-Host "  API: https://$ApiHost  (origin https://209.58.145.5:$ApiPort, loopback check only)"
+Write-Host "  Apps: $AppsPublicUrl/<slug>-<id>/  (written by the API to $AppsRoot)"
+Write-Host "  Sign in as $AdminEmail with MAD_STUDIO_ADMIN_PASSWORD from deploy\.env.deploy"

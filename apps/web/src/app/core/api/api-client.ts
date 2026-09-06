@@ -2,6 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { z, type ZodType } from 'zod';
 import {
   ApiErrorSchema,
+  AuthStateSchema,
   ComponentPresetSchema,
   DeploymentSchema,
   GenerationCreatedSchema,
@@ -12,6 +13,8 @@ import {
   ProjectIntegrationSchema,
   ProjectSchema,
   type ApiError,
+  type AuthState,
+  type ChangePasswordRequest,
   type ComponentPreset,
   type CreateGenerationRequest,
   type Deployment,
@@ -19,9 +22,11 @@ import {
   type GenerationCreated,
   type GenerationSummary,
   type Integration,
+  type LoginRequest,
   type Project,
   type ProjectDocument,
   type ProjectIntegration,
+  type RegisterRequest,
   type SaveDocumentRequest,
 } from '@mad/schema';
 import { environment } from '../../../environments/environment';
@@ -47,10 +52,20 @@ export class ApiUnreachableError extends Error {
   }
 }
 
-const HealthSchema = z.object({ status: z.enum(['ok', 'degraded']), storage: z.string(), storageReachable: z.boolean(), uptimeMs: z.number(), env: z.string(), version: z.string() });
+const HealthSchema = z.object({
+  status: z.enum(['ok', 'degraded']),
+  storage: z.string(),
+  storageReachable: z.boolean(),
+  uptimeMs: z.number(),
+  env: z.string(),
+  version: z.string(),
+  planner: z.object({ mode: z.enum(['model', 'heuristic']), model: z.string().nullable() }).optional(),
+  deploy: z.object({ mode: z.enum(['fleet', 'local']), publicBase: z.string().nullable() }).optional(),
+});
 export type Health = z.infer<typeof HealthSchema>;
 
 const PresetsResponseSchema = z.object({ categories: z.array(z.object({ id: z.string(), label: z.string() })), items: z.array(ComponentPresetSchema) });
+const NoContentSchema = z.undefined();
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -61,10 +76,15 @@ interface RequestOptions {
   timeoutMs?: number;
 }
 
+/** Custom header the API requires on state-changing requests; browsers only send it after a CORS preflight the API grants to the studio's origin. */
+export const CLIENT_HEADER = 'x-mad-client';
+
 /**
  * Typed fetch wrapper. Every response is validated against the shared Zod
  * contract before it reaches a signal, network failures back off with jitter,
  * and structured API errors surface as `ApiRequestError` with a stable code.
+ * Requests carry the session cookie; a 401 on a session-backed call bumps
+ * `sessionLost` so the auth layer can react in one place.
  */
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
@@ -73,10 +93,36 @@ export class ApiClient {
   readonly configured = this.baseUrl.length > 0;
   /** Last observed reachability; the studio uses it to decide on offline mode. */
   readonly reachable = signal<boolean | null>(this.configured ? null : false);
+  /** Increments whenever a session-backed request is rejected as unauthenticated. */
+  readonly sessionLost = signal(0);
 
   async health(signal?: AbortSignal): Promise<Health> {
     return this.request('/health', HealthSchema, { retries: 1, timeoutMs: 3500, ...(signal ? { signal } : {}) });
   }
+
+  // ---------- auth ----------
+
+  me(): Promise<AuthState> {
+    return this.request('/auth/me', AuthStateSchema, { retries: 0 });
+  }
+
+  login(body: LoginRequest): Promise<AuthState> {
+    return this.request('/auth/login', AuthStateSchema, { method: 'POST', body, retries: 0 });
+  }
+
+  register(body: RegisterRequest): Promise<AuthState> {
+    return this.request('/auth/register', AuthStateSchema, { method: 'POST', body, retries: 0 });
+  }
+
+  logout(): Promise<void> {
+    return this.request('/auth/logout', NoContentSchema, { method: 'POST', retries: 0 });
+  }
+
+  changePassword(body: ChangePasswordRequest): Promise<{ revokedSessions: number }> {
+    return this.request('/auth/password', z.object({ revokedSessions: z.number().int() }), { method: 'POST', body, retries: 0 });
+  }
+
+  // ---------- projects ----------
 
   listProjects(limit = 24): Promise<{ items: Project[]; nextCursor: string | null; total: number }> {
     return this.request(`/projects?limit=${limit}`, PaginatedSchema(ProjectSchema));
@@ -94,9 +140,15 @@ export class ApiClient {
     return this.request(`/projects/${projectId}/document`, ProjectDocumentSchema);
   }
 
+  documentHistory(projectId: string, limit = 20): Promise<ProjectDocument[]> {
+    return this.request(`/projects/${projectId}/document/history?limit=${limit}`, z.array(ProjectDocumentSchema));
+  }
+
   saveDocument(projectId: string, body: SaveDocumentRequest): Promise<ProjectDocument> {
     return this.request(`/projects/${projectId}/document`, ProjectDocumentSchema, { method: 'PUT', body, retries: 0 });
   }
+
+  // ---------- generations ----------
 
   createGeneration(body: CreateGenerationRequest): Promise<GenerationCreated> {
     return this.request('/generations', GenerationCreatedSchema, { method: 'POST', body, retries: 0 });
@@ -109,6 +161,12 @@ export class ApiClient {
   cancelGeneration(id: string): Promise<GenerationSummary> {
     return this.request(`/generations/${id}/cancel`, GenerationSummarySchema, { method: 'POST', retries: 0 });
   }
+
+  streamUrl(generationId: string, after: number): string {
+    return `${this.baseUrl}/generations/${generationId}/events?after=${after}`;
+  }
+
+  // ---------- catalog ----------
 
   listPresets(designSystem: DesignSystem, q?: string): Promise<{ categories: { id: string; label: string }[]; items: ComponentPreset[] }> {
     const query = new URLSearchParams({ designSystem });
@@ -132,6 +190,8 @@ export class ApiClient {
     return this.request(`/projects/${projectId}/integrations/${integrationId}`, ProjectIntegrationSchema, { method: 'PATCH', body: { status, config }, retries: 0 });
   }
 
+  // ---------- deployments ----------
+
   createDeployment(projectId: string, target: Deployment['target']): Promise<Deployment> {
     return this.request(`/projects/${projectId}/deployments`, DeploymentSchema, { method: 'POST', body: { target }, retries: 0 });
   }
@@ -142,10 +202,6 @@ export class ApiClient {
 
   listDeployments(projectId: string, limit = 10): Promise<Deployment[]> {
     return this.request(`/projects/${projectId}/deployments?limit=${limit}`, z.array(DeploymentSchema));
-  }
-
-  streamUrl(generationId: string, after: number): string {
-    return `${this.baseUrl}/generations/${generationId}/events?after=${after}`;
   }
 
   private async request<T>(path: string, schema: ZodType<T>, options: RequestOptions = {}): Promise<T> {
@@ -167,7 +223,12 @@ export class ApiClient {
       try {
         const res = await fetch(`${this.baseUrl}${path}`, {
           method,
-          headers: { accept: 'application/json', ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}) },
+          credentials: 'include',
+          headers: {
+            accept: 'application/json',
+            ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
+            ...(method !== 'GET' ? { [CLIENT_HEADER]: 'web' } : {}),
+          },
           body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
           signal: controller.signal,
         });
@@ -180,6 +241,7 @@ export class ApiClient {
           const error: ApiError = parsed.success
             ? parsed.data
             : { statusCode: res.status, code: 'http_error', message: res.statusText || `Request failed with ${res.status}`, requestId: res.headers.get('x-request-id') ?? 'n/a' };
+          if (res.status === 401 && error.code === 'unauthenticated' && !path.startsWith('/auth/')) this.sessionLost.update((n) => n + 1);
           throw new ApiRequestError(error, res.status);
         }
         const result = schema.safeParse(json);

@@ -17,7 +17,8 @@ import type {
 } from '@mad/schema';
 import { MadDocumentSchema, cloneWithFreshIds, countNodes, createIdFactory, findNode, findParent, insertNode, moveNode, patchNode, pathTo, removeNode, type NodePatch } from '@mad/schema';
 import { INTEGRATION_RULES, PRESETS, nav, page, sidebar, stack, type BuildContext } from '@mad/planner';
-import { ApiClient, ApiRequestError, ApiUnreachableError } from '../../core/api/api-client';
+import { ApiClient, ApiRequestError, ApiUnreachableError, type Health } from '../../core/api/api-client';
+import { AuthService } from '../../core/auth/auth.service';
 import { GenerationStream } from '../../core/api/generation-stream';
 import { OfflineRunner } from '../../core/api/offline-runner';
 import { RenderContext } from '../../core/render/render-context';
@@ -70,6 +71,7 @@ interface LocalProject {
 export class StudioStore {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly render = inject(RenderContext);
   private readonly destroyRef = inject(DestroyRef);
@@ -123,6 +125,11 @@ export class StudioStore {
   readonly saveState = signal<SaveState>('idle');
   readonly lastSavedAt = signal<string | null>(null);
   readonly mode = signal<ConnectionMode>('unknown');
+  /** Last health report from the API: which planner answers prompts and where deploys land. */
+  readonly health = signal<Health | null>(null);
+  /** Sign-in state, mirrored from the auth service for templates. */
+  readonly signedIn = computed(() => this.auth.status() === 'authenticated');
+  readonly account = computed(() => this.auth.user());
   /** False on static deployments: the badge reads "Browser mode" instead of "Offline". */
   readonly apiConfigured = this.api.configured;
   readonly isLocal = computed(() => (this.projectId() ?? '').startsWith('local-'));
@@ -191,8 +198,16 @@ export class StudioStore {
     if (!force && Date.now() - this.probedAt < 20000 && this.mode() !== 'unknown') return this.mode();
     this.probePromise = (async () => {
       try {
-        await this.api.health();
+        const health = await this.api.health();
+        const first = this.health() === null;
+        this.health.set(health);
         this.mode.set('api');
+        await this.auth.refresh();
+        if (first && health.planner) {
+          const planner = health.planner.mode === 'model' ? `${health.planner.model} with deterministic fallback` : 'deterministic';
+          const deploys = health.deploy?.mode === 'fleet' ? health.deploy.publicBase : 'local preview';
+          this.log('info', `Connected to the API. Planner: ${planner}. Deploys: ${deploys}.`);
+        }
         if (this.catalog().length === 0) {
           this.api.integrationCatalog().then((c) => this.catalog.set(c)).catch(() => undefined);
         }
@@ -233,6 +248,11 @@ export class StudioStore {
       return;
     }
     try {
+      if ((await this.probe()) === 'api' && !(await this.auth.requireSession())) {
+        this.toast.info('Sign in to open cloud projects', 'Your local projects are still available from the History panel.');
+        await this.router.navigate(['/studio'], { replaceUrl: true });
+        return;
+      }
       const [project, doc] = await Promise.all([this.api.getProject(id), this.api.getDocument(id).catch((e) => (e instanceof ApiRequestError && e.code === 'invalid_state' ? null : Promise.reject(e)))]);
       this.mode.set('api');
       this.project.set(project);
@@ -266,8 +286,10 @@ export class StudioStore {
         this.mode.set('offline');
         this.toast.error('API unreachable', 'Could not load the project. Start the API or open a local project.', { label: 'Retry', run: () => void this.loadProject(id) });
       } else if (error instanceof ApiRequestError && error.status === 404) {
-        this.toast.error('Project not found', 'It may have been deleted.');
+        this.toast.error('Project not found', 'It may have been deleted, or it belongs to another account.');
         await this.router.navigate(['/studio'], { replaceUrl: true });
+      } else if (error instanceof ApiRequestError && error.status === 401) {
+        this.toast.error('Signed out', 'Sign in again to open this project.', { label: 'Sign in', run: () => void this.auth.requireSession().then((ok) => { if (ok) void this.loadProject(id); }) });
       } else {
         this.toast.error('Could not load project', error instanceof Error ? error.message : String(error));
       }
@@ -338,7 +360,13 @@ export class StudioStore {
     this.log('info', `Prompt: "${text}"`);
 
     const mode = await this.probe(true);
-    if (mode === 'api') {
+    let useApi = mode === 'api';
+    if (useApi && !this.signedIn()) {
+      this.statusMessage.set('Sign in to continue');
+      useApi = await this.auth.requireSession();
+      if (!useApi) this.log('info', 'Continuing without an account: this build runs in your browser and saves locally.');
+    }
+    if (useApi) {
       try {
         const created = await this.api.createGeneration({ prompt: text, designSystem, ...(keepProject && currentProjectId ? { projectId: currentProjectId } : {}) });
         this.generationId.set(created.id);
@@ -382,7 +410,7 @@ export class StudioStore {
     // Offline: run the planner locally, persist to this browser.
     const localId = keepProject && currentProjectId?.startsWith('local-') ? currentProjectId : `local-${Date.now().toString(36)}`;
     this.projectId.set(localId);
-    this.log(this.apiConfigured ? 'warn' : 'info', `${this.apiConfigured ? 'API unreachable.' : 'No API configured for this build.'} Running the planner in your browser; this project is saved locally.`);
+    if (mode !== 'api') this.log(this.apiConfigured ? 'warn' : 'info', `${this.apiConfigured ? 'API unreachable.' : 'No API configured for this build.'} Running the planner in your browser; this project is saved locally.`);
     this.genStatus.set('queued');
     this.offline = new OfflineRunner(
       text,
@@ -813,6 +841,9 @@ export class StudioStore {
         if (error instanceof ApiRequestError && error.code === 'conflict') {
           this.saveState.set('conflict');
           this.toast.error('Save conflict', 'This project was changed elsewhere. Reload to get the latest version; your local edits stay in undo history.', { label: 'Reload latest', run: () => void this.reloadLatest() });
+        } else if (error instanceof ApiRequestError && error.status === 401) {
+          this.saveState.set('error');
+          this.toast.error('Signed out', 'Your session ended. Sign in to keep saving this project; edits are kept in memory.', { label: 'Sign in', run: () => void this.auth.requireSession().then((ok) => { if (ok) void this.save(); }) });
         } else if (error instanceof ApiUnreachableError) {
           this.saveState.set('error');
           this.mode.set('offline');
@@ -957,15 +988,16 @@ export class StudioStore {
     const id = this.projectId();
     if (!id) return;
     if (id.startsWith('local-') || this.mode() !== 'api') {
-      this.toast.info('Deploy needs the API', 'Local projects cannot be deployed. Start the API and re-run the build.');
+      this.toast.info('Deploy needs the API', 'Local projects cannot be deployed. Sign in and re-run the build to deploy it.');
       return;
     }
+    if (!(await this.auth.requireSession())) return;
     if (this.saveState() === 'dirty' || this.saveState() === 'saving') await this.save();
     this.deploying.set(true);
     try {
       let deployment = await this.api.createDeployment(id, target);
       this.deployments.update((d) => [deployment, ...d]);
-      this.toast.info(`Deploying to ${target}`, 'Bundling, migrating and warming the edge…');
+      this.toast.info(`Deploying to ${target}`, this.health()?.deploy?.mode === 'fleet' ? 'Rendering the page and publishing it to the fleet…' : 'Rendering the page and publishing it to the local export root…');
       // Poll until terminal.
       for (let i = 0; i < 40 && (deployment.status === 'queued' || deployment.status === 'building'); i += 1) {
         await new Promise((r) => setTimeout(r, 700));
@@ -974,7 +1006,7 @@ export class StudioStore {
       }
       if (deployment.status === 'live' && deployment.url) {
         const url = deployment.url;
-        this.toast.success('Deployed', url, { label: 'Copy URL', run: () => void navigator.clipboard.writeText(url) });
+        this.toast.success('Deployed', url.replace(/^https?:\/\//, ''), { label: 'Open', run: () => void window.open(url, '_blank', 'noopener') });
         this.log('info', `Deployed ${target}: ${url}`);
         if (target === 'production') this.project.update((p) => (p ? { ...p, status: 'deployed' } : p));
       } else {
@@ -987,6 +1019,26 @@ export class StudioStore {
     }
   }
 
+  // =====================================================================
+  // Account
+  // =====================================================================
+
+  /** Ends the session and leaves any cloud project; local projects stay available. */
+  async signOut(): Promise<void> {
+    const wasCloud = this.projectId() !== null && !this.isLocal();
+    if (wasCloud && (this.saveState() === 'dirty' || this.saveState() === 'saving')) await this.save().catch(() => undefined);
+    await this.auth.signOut();
+    if (wasCloud) {
+      this.resetDocumentState();
+      await this.router.navigate(['/studio'], { replaceUrl: true, queryParams: {} });
+    }
+    this.toast.info('Signed out', 'Cloud projects are hidden until you sign in again.');
+  }
+
+  /** Opens the sign-in sheet; resolves true once a session exists. */
+  signIn(): Promise<boolean> {
+    return this.auth.requireSession('sign-in');
+  }
   // =====================================================================
   // Schema export
   // =====================================================================

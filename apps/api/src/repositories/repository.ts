@@ -9,6 +9,7 @@ import type {
   Project,
   ProjectDocument,
   ProjectIntegration,
+  Session,
   User,
   Workspace,
 } from '@mad/schema';
@@ -16,9 +17,23 @@ import type {
 /**
  * The repository is the only boundary between domain services and storage.
  * Two implementations exist: PostgreSQL via Drizzle, and an in-memory mirror
- * with the same constraints (unique slugs, cascading deletes, version checks).
- * Services never know which one they are talking to.
+ * with the same constraints (unique slugs, unique emails, cascading deletes,
+ * version checks). Services never know which one they are talking to.
  */
+
+export interface NewUser {
+  email: string;
+  displayName: string;
+  passwordHash: string | null;
+}
+
+export interface NewSession {
+  userId: string;
+  tokenHash: string;
+  expiresAt: string;
+  ip: string | null;
+  userAgent: string | null;
+}
 
 export interface NewProject {
   workspaceId: string;
@@ -60,10 +75,27 @@ export interface Repository {
 
   users: {
     findById(id: string): Promise<User | null>;
+    /** Case-insensitive. */
+    findByEmail(email: string): Promise<User | null>;
+    create(input: NewUser): Promise<User>;
+    getPasswordHash(id: string): Promise<string | null>;
+    setPassword(id: string, passwordHash: string): Promise<void>;
+    touchLogin(id: string): Promise<void>;
+  };
+  sessions: {
+    create(input: NewSession): Promise<Session>;
+    /** Returns the session only if it is neither revoked nor expired. */
+    findActiveByTokenHash(tokenHash: string): Promise<Session | null>;
+    touch(id: string, lastSeenAt: string, expiresAt: string): Promise<void>;
+    revoke(id: string): Promise<void>;
+    /** Revokes every active session of the user except `exceptId`; returns how many were revoked. */
+    revokeAllForUser(userId: string, exceptId: string | null): Promise<number>;
   };
   workspaces: {
     findById(id: string): Promise<Workspace | null>;
     findDefaultForUser(userId: string): Promise<Workspace | null>;
+    create(ownerId: string, name: string, slug: string): Promise<Workspace>;
+    slugExists(slug: string): Promise<boolean>;
   };
   projects: {
     list(workspaceId: string, options: ListOptions): Promise<Page<Project>>;

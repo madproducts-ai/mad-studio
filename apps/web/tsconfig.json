@@ -20,6 +20,9 @@
       ],
       "@mad/planner": [
         "../../packages/planner/src/index.ts"
+      ],
+      "@mad/export": [
+        "../../packages/export/src/index.ts"
       ]
     }
   },

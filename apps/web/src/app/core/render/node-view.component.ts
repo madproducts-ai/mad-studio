@@ -5,7 +5,8 @@ import { isContainer } from '@mad/schema';
 import { Icon, type IconName, ICONS } from '../ui/icon.component';
 import { Chart } from './chart.component';
 import { RenderContext } from './render-context';
-import { cellFor, chatThread, hashSeed, initials, personName, rng, series, taskCard } from './fake-data';
+import { sparklinePoints } from '@mad/export';
+import { cellFor, chatThread, hashSeed, initials, personName, rng, taskCard } from './fake-data';
 
 const str = (v: PropValue | undefined, fallback = ''): string => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : fallback);
 const num = (v: PropValue | undefined, fallback: number): number => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)) ? Number(v) : fallback);
@@ -125,14 +126,7 @@ export class NodeView {
 
   protected readonly chat = computed(() => chatThread(rng(this.seed()), str(this.p()['agentName'], 'Agent')));
   protected readonly avatarName = computed(() => str(this.p()['name']) || personName(rng(this.seed())));
-  protected readonly sparkline = computed(() => {
-    const r = rng(this.seed());
-    const trend = str(this.p()['trend'], 'up');
-    const data = series(r, 14, trend === 'up' ? 0.8 : trend === 'down' ? -0.8 : 0);
-    const w = 72;
-    const h = 22;
-    return data.map((v, i) => `${((i / 13) * w).toFixed(1)},${(h - v * (h - 3) - 1).toFixed(1)}`).join(' ');
-  });
+  protected readonly sparkline = computed(() => sparklinePoints(this.node().id, str(this.p()['trend'], 'up')));
   protected readonly pricingTiers = computed(() => {
     const tiers = list(this.p()['tiers']);
     const names = tiers.length ? tiers : ['Starter', 'Growth', 'Scale'];

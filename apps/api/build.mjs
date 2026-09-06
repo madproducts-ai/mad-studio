@@ -21,6 +21,7 @@ await build({
   alias: {
     '@mad/schema': resolve(here, '../../packages/schema/src/index.ts'),
     '@mad/planner': resolve(here, '../../packages/planner/src/index.ts'),
+    '@mad/export': resolve(here, '../../packages/export/src/index.ts'),
   },
   tsconfig: resolve(here, 'tsconfig.json'),
   logLevel: 'info',

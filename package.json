@@ -19,7 +19,8 @@
     "test": "npm run test --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace apps/api",
     "db:seed": "npm run db:seed --workspace apps/api",
-    "media:build": "node media/build-media.mjs"
+    "media:build": "node media/build-media.mjs",
+    "sync:export-css": "node scripts/sync-export-css.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

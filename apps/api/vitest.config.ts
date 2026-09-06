@@ -6,10 +6,13 @@ export default defineConfig({
     alias: {
       '@mad/schema': fileURLToPath(new URL('../../packages/schema/src/index.ts', import.meta.url)),
       '@mad/planner': fileURLToPath(new URL('../../packages/planner/src/index.ts', import.meta.url)),
+      '@mad/export': fileURLToPath(new URL('../../packages/export/src/index.ts', import.meta.url)),
     },
   },
   test: {
     include: ['src/**/*.spec.ts'],
     environment: 'node',
+    // scrypt-backed auth tests are CPU-bound and run alongside other workers.
+    testTimeout: 30000,
   },
 });

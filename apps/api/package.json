@@ -13,6 +13,8 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "@mad/export": "*",
     "@mad/planner": "*",
     "@mad/schema": "*",
     "@nestjs/common": "^11.1.0",

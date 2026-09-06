@@ -12,3 +12,6 @@ coverage/
 deploy/.env.deploy
 deploy/.firebase-sa.json
 apps/api/publish/
+
+# Static sites written by the Deploy button in development
+exports/

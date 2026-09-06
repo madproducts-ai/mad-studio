@@ -18,7 +18,8 @@
     "noEmit": true,
     "paths": {
       "@mad/schema": ["../../packages/schema/src/index.ts"],
-      "@mad/planner": ["../../packages/planner/src/index.ts"]
+      "@mad/planner": ["../../packages/planner/src/index.ts"],
+      "@mad/export": ["../../packages/export/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "build.mjs", "vitest.config.ts"]

@@ -8,6 +8,8 @@ import { LeftRail } from './rail/left-rail.component';
 import { StudioCanvas } from './canvas/studio-canvas.component';
 import { InspectorPanel } from './inspector/inspector-panel.component';
 import { PromptBar } from './prompt/prompt-bar.component';
+import { AuthDialog } from './auth/auth-dialog.component';
+import { AuthService } from '../core/auth/auth.service';
 
 /**
  * The IDE. Owns the store and render context for one project session, routes
@@ -15,7 +17,7 @@ import { PromptBar } from './prompt/prompt-bar.component';
  */
 @Component({
   selector: 'mad-studio',
-  imports: [StudioTopbar, LeftRail, StudioCanvas, InspectorPanel, PromptBar],
+  imports: [StudioTopbar, LeftRail, StudioCanvas, InspectorPanel, PromptBar, AuthDialog],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'studio fixed inset-0 grid bg-bg text-ink', '[class.has-inspector]': 'store.inspectorOpen() && store.selectedNode() !== null', '[class.has-panel]': 'store.leftPanel() !== null' },
   template: `
@@ -26,6 +28,9 @@ import { PromptBar } from './prompt/prompt-bar.component';
       <mad-inspector-panel class="[grid-area:inspector]" [node]="node" />
     }
     <mad-prompt-bar class="[grid-area:prompt]" #promptBar />
+    @if (auth.dialogOpen()) {
+      <mad-auth-dialog />
+    }
   `,
   styles: `
     :host {
@@ -45,6 +50,7 @@ import { PromptBar } from './prompt/prompt-bar.component';
 })
 export class StudioPage {
   protected readonly store = inject(StudioStore);
+  protected readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly promptBar = viewChild<PromptBar>('promptBar');
@@ -74,6 +80,7 @@ export class StudioPage {
 
   @HostListener('window:keydown', ['$event'])
   protected onKeydown(event: KeyboardEvent): void {
+    if (this.auth.dialogOpen()) return;
     const target = event.target as HTMLElement | null;
     const inField = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
     const mod = event.ctrlKey || event.metaKey;

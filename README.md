@@ -67,7 +67,9 @@ npm run dev:api
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/health` | Storage kind and reachability |
+| `GET` | `/health` | Storage, planner mode (`model`/`heuristic`) and deploy target |
+| `POST` | `/auth/register` · `/auth/login` · `/auth/logout` | Email + password; sets the HttpOnly `mad_session` cookie |
+| `GET/POST` | `/auth/me` · `/auth/password` | Current session; changing the password revokes other sessions |
 | `GET/POST` | `/projects` · `GET/PATCH/DELETE /projects/:id` | Workspace-scoped |
 | `GET/PUT` | `/projects/:id/document` | Optimistic lock via `baseVersion` → `409 conflict` |
 | `GET` | `/projects/:id/document/history` | Append-only versions |
@@ -76,9 +78,21 @@ npm run dev:api
 | `POST` | `/generations/:id/cancel` | Resolves after the terminal event |
 | `GET` | `/presets?designSystem=&q=` | Component library |
 | `GET` | `/integrations` · `/projects/:id/integrations` | Catalog and attachments |
-| `POST/GET` | `/projects/:id/deployments` | Simulated pipeline: queued → building → live |
+| `POST/GET` | `/projects/:id/deployments` | Renders the saved version to a static page and publishes it: queued → building → live |
 
 Every error is `{ statusCode, code, message, details?, requestId }`. Every response is validated against `@mad/schema` on both sides of the wire.
+
+### Authentication
+
+Accounts are email + password (scrypt). A successful register/login sets `mad_session`, an HttpOnly, SameSite=Lax cookie holding an opaque token that is stored hashed with a sliding 30-day expiry. Every other route requires it; state-changing requests must also send `X-MAD-Client: web`, which browsers can only attach after the CORS preflight the API grants to the studio origin. Login and registration are rate limited per IP and per email. The studio asks you to sign in the first time a cloud action needs it and offers **browser mode** (local projects, no account) as the alternative.
+
+### Planner
+
+With `ANTHROPIC_API_KEY` set, the API asks Claude (`PLANNER_MODEL`, default `claude-opus-5`, adaptive thinking, structured output validated against `AppSpecSchema` in `@mad/planner`) for an application spec and materialises it with the same builders as the deterministic planner, so every result renders and edits identically. Without a key, or when the model fails or times out, the deterministic planner answers and the console says so. The event stream contract is the same either way.
+
+### Deployments
+
+Deploy renders the saved document version with `@mad/export` — a static HTML renderer generated from the studio canvas CSS (`npm run sync:export-css`) — and writes `index.html`, `manifest.json` and `document.json` to `DEPLOY_EXPORT_ROOT`. Production deploys own `<slug>-<id>/` and are replaced in place; previews are immutable snapshots under `<slug>-<id>/p/<deployment>/`. Without `DEPLOY_PUBLIC_BASE` the API serves the export root itself at `/exports/`; on the fleet the FE site serves it under `https://studio.madproducts.ai/apps/`.
 
 ## Deploy
 
@@ -111,7 +125,7 @@ Switches: `-SkipBuild`, `-SkipInstall`, `-SkipMigrate`. `deploy\test-mad-deploy.
 set on any Node 22+ host with PostgreSQL reachable.
 ## Environment
 
-See `apps/api/.env.example`. The API reads `apps/api/.env` (real environment variables win). `PORT` defaults to `4100`, `GENERATION_PACE` scales stream timing (`0` = instant, for tests). In development any loopback origin passes CORS.
+See `apps/api/.env.example`. The API reads `apps/api/.env` (real environment variables win). `PORT` defaults to `4100`, `GENERATION_PACE` scales stream timing (`0` = instant, for tests). In development any loopback origin passes CORS. Auth: `SESSION_TTL_DAYS`, `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`. Planner: `ANTHROPIC_API_KEY`, `PLANNER_MODEL`, `PLANNER_EFFORT`, `PLANNER_TIMEOUT_MS`. Deploy: `DEPLOY_EXPORT_ROOT`, `DEPLOY_PUBLIC_BASE`. On the fleet these come from the untracked `deploy/.env.deploy` (see `deploy/.env.deploy.example`) and land in the API's `web.config`.
 
 ## Brand
 

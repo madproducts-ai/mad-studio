@@ -4,6 +4,7 @@ import type { Integration, ProjectIntegration } from '@mad/schema';
 import { NotFoundError } from '../../common/errors';
 import { zodBody } from '../../common/zod-validation.pipe';
 import { CurrentPrincipal, PrincipalGuard, type Principal } from '../../auth/current-user';
+import { Public } from '../../auth/public.decorator';
 import { REPOSITORY, type Repository } from '../../repositories/repository';
 import { ProjectsService } from '../projects/projects.service';
 
@@ -20,11 +21,14 @@ export class IntegrationsController {
     @Inject(ProjectsService) private readonly projects: ProjectsService,
   ) {}
 
+  /** The catalog is public marketing data; project bindings below require a session. */
+  @Public()
   @Get('integrations')
   catalog(): Promise<Integration[]> {
     return this.repo.integrations.catalog();
   }
 
+  @Public()
   @Get('integrations/:slug')
   async one(@Param('slug', zodBody(SlugSchema)) slug: string): Promise<Integration> {
     const item = await this.repo.integrations.findBySlug(slug);

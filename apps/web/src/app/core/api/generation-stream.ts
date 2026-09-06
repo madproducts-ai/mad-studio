@@ -30,7 +30,8 @@ export class GenerationStream {
   open(): void {
     if (this.closed) return;
     this.source?.close();
-    const source = new EventSource(this.urlFor(this.lastSeq));
+    // The session rides in an HttpOnly cookie, so the stream must be opened with credentials.
+    const source = new EventSource(this.urlFor(this.lastSeq), { withCredentials: true });
     this.source = source;
 
     source.onopen = () => {

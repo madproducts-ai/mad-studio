@@ -117,28 +117,54 @@ jobs:
           cat /tmp/health.json
           node -e "const h=require('/tmp/health.json'); if (h.storage !== 'postgres' || !h.storageReachable) { console.error('API is not on PostgreSQL'); process.exit(1); }"
 
-      - name: "Smoke: generate, persist, lock, deploy"
+      - name: "Smoke: auth, generate, persist, lock, deploy"
         run: |
           set -euo pipefail
           B=http://127.0.0.1:4100/v1
-          GEN=$(curl -fsS -X POST "$B/generations" -H 'content-type: application/json' \
+          J=/tmp/cookies.txt
+          # Anonymous calls are rejected; registering sets the session cookie.
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' "$B/projects")
+          [ "$CODE" = "401" ] || (echo "::error::expected 401 for anonymous /projects, got $CODE"; exit 1)
+          curl -fsS -c "$J" -X POST "$B/auth/register" -H 'content-type: application/json' -H 'x-mad-client: web' \
+            -d '{"email":"ci@example.com","password":"ci-password-2026","displayName":"CI"}' > /tmp/auth.json
+          node -e "const a=require('/tmp/auth.json'); if (!a.user || !a.workspace) { console.error(a); process.exit(1); } console.log('registered', a.user.email, 'workspace', a.workspace.slug)"
+          grep -q mad_session "$J" || (echo "::error::no session cookie set"; exit 1)
+          # State-changing requests without the client header are refused (CSRF guard).
+          CODE=$(curl -s -b "$J" -o /dev/null -w '%{http_code}' -X POST "$B/generations" -H 'content-type: application/json' -d '{"prompt":"csrf probe"}')
+          [ "$CODE" = "403" ] || (echo "::error::expected 403 without x-mad-client, got $CODE"; exit 1)
+          GEN=$(curl -fsS -b "$J" -X POST "$B/generations" -H 'content-type: application/json' -H 'x-mad-client: web' \
             -d '{"prompt":"Build an internal CRM dashboard with Stripe billing and a customer support chat"}')
           ID=$(node -e "console.log(JSON.parse(process.argv[1]).id)" "$GEN")
           PROJ=$(node -e "console.log(JSON.parse(process.argv[1]).projectId)" "$GEN")
           # Pace 0 finishes almost immediately; poll for the terminal state anyway.
           for i in $(seq 1 30); do
-            STATUS=$(curl -fsS "$B/generations/$ID" | node -e "process.stdin.on('data',d=>console.log(JSON.parse(d).status))")
+            STATUS=$(curl -fsS -b "$J" "$B/generations/$ID" | node -e "process.stdin.on('data',d=>console.log(JSON.parse(d).status))")
             [ "$STATUS" = "complete" ] && break
             sleep 1
           done
           [ "$STATUS" = "complete" ] || (echo "::error::generation ended as $STATUS"; cat /tmp/api.log; exit 1)
-          DOC=$(curl -fsS "$B/projects/$PROJ/document")
+          DOC=$(curl -fsS -b "$J" "$B/projects/$PROJ/document")
           node -e "const d=JSON.parse(process.argv[1]); if (d.version!==1||d.authoredBy!=='ai'||d.document.tables.length<1) { console.error(d); process.exit(1); } console.log('document v1 with', d.document.tables.length, 'tables')" "$DOC"
           STALE=$(node -e "const d=JSON.parse(process.argv[1]); console.log(JSON.stringify({baseVersion:0, document:d.document}))" "$DOC")
-          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$B/projects/$PROJ/document" -H 'content-type: application/json' --data-binary "$STALE")
+          CODE=$(curl -s -b "$J" -o /dev/null -w '%{http_code}' -X PUT "$B/projects/$PROJ/document" -H 'content-type: application/json' -H 'x-mad-client: web' --data-binary "$STALE")
           [ "$CODE" = "409" ] || (echo "::error::expected 409 on stale save, got $CODE"; exit 1)
           echo "optimistic lock: 409 as expected"
-          curl -fsS -X POST "$B/projects/$PROJ/deployments" -H 'content-type: application/json' -d '{"target":"preview"}' > /dev/null
+          DEP=$(curl -fsS -b "$J" -X POST "$B/projects/$PROJ/deployments" -H 'content-type: application/json' -H 'x-mad-client: web' -d '{"target":"preview"}')
+          DID=$(node -e "console.log(JSON.parse(process.argv[1]).id)" "$DEP")
+          for i in $(seq 1 30); do
+            DSTATUS=$(curl -fsS -b "$J" "$B/projects/$PROJ/deployments/$DID" | node -e "process.stdin.on('data',d=>console.log(JSON.parse(d).status))")
+            [ "$DSTATUS" = "live" ] && break
+            [ "$DSTATUS" = "failed" ] && break
+            sleep 1
+          done
+          [ "$DSTATUS" = "live" ] || (echo "::error::deployment ended as $DSTATUS"; cat /tmp/api.log; exit 1)
+          URL=$(curl -fsS -b "$J" "$B/projects/$PROJ/deployments/$DID" | node -e "process.stdin.on('data',d=>console.log(JSON.parse(d).url))")
+          echo "deployed preview at $URL"
+          curl -fsS "$URL" | grep -q 'data-mad-deployment=' || (echo "::error::deployed page is not served"; exit 1)
+          # Another account cannot see this workspace's project.
+          curl -fsS -c /tmp/other.txt -X POST "$B/auth/register" -H 'content-type: application/json' -H 'x-mad-client: web' -d '{"email":"other@example.com","password":"other-password-2026","displayName":"Other"}' > /dev/null
+          CODE=$(curl -s -b /tmp/other.txt -o /dev/null -w '%{http_code}' "$B/projects/$PROJ")
+          [ "$CODE" = "404" ] || (echo "::error::expected 404 for a foreign project, got $CODE"; exit 1)
           echo "smoke passed"
 
       - name: API log on failure

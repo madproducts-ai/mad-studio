@@ -78,8 +78,8 @@ export class HistoryPanel {
     const id = this.store.projectId();
     if (!id || id.startsWith('local-') || this.store.mode() !== 'api') return;
     this.loading.set(true);
-    fetch(`${this.api.baseUrl}/projects/${id}/document/history?limit=20`)
-      .then((r) => (r.ok ? (r.json() as Promise<ProjectDocument[]>) : Promise.reject(new Error(r.statusText))))
+    this.api
+      .documentHistory(id, 20)
       .then((list) => this.versions.set(list))
       .catch(() => this.versions.set([]))
       .finally(() => this.loading.set(false));
