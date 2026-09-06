@@ -1,0 +1,32 @@
+{
+  "name": "mad-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MAD Studio â€” AI-native platform to generate, visually edit, and deploy production-ready web and mobile applications.",
+  "homepage": "https://studio.madproducts.ai",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:web": "npm run start --workspace apps/web",
+    "dev:api": "npm run start:dev --workspace apps/api",
+    "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace apps/web",
+    "build:api": "npm run build --workspace apps/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "npm run db:migrate --workspace apps/api",
+    "db:seed": "npm run db:seed --workspace apps/api",
+    "media:build": "node media/build-media.mjs"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.4"
+  }
+}

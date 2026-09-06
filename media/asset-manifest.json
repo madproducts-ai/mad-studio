@@ -1,0 +1,104 @@
+{
+  "brand": "MAD Studio",
+  "domain": "https://studio.madproducts.ai",
+  "generatedBy": "media/build-media.mjs",
+  "sources": {
+    "logo": "media/logo.svg",
+    "logoLight": "media/logo-light.svg",
+    "logoMark": "media/logo-mark.svg",
+    "icon": "media/icon.svg",
+    "ogImage": "media/og-image.svg",
+    "manifest": "media/site.webmanifest"
+  },
+  "outputs": {
+    "favicon": "apps/web/public/favicon.ico",
+    "iconSvg": "apps/web/public/icons/icon.svg",
+    "icon192": "apps/web/public/icons/icon-192.png",
+    "icon512": "apps/web/public/icons/icon-512.png",
+    "iconMaskable512": "apps/web/public/icons/icon-maskable-512.png",
+    "appleTouch": "apps/web/public/icons/apple-touch-icon.png",
+    "ogImage": "apps/web/public/og-image.png",
+    "logo": "apps/web/public/brand/logo.svg",
+    "logoLight": "apps/web/public/brand/logo-light.svg",
+    "logoMark": "apps/web/public/brand/logo-mark.svg",
+    "manifest": "apps/web/public/site.webmanifest"
+  },
+  "colors": {
+    "graphite-950": "#0B0D12",
+    "graphite-900": "#12151C",
+    "graphite-800": "#181C26",
+    "graphite-700": "#1F2432",
+    "line-600": "#2A3040",
+    "ink-100": "#E7EAF0",
+    "ink-400": "#9AA3B5",
+    "ember-500": "#F5A524",
+    "signal-400": "#5FD3FF",
+    "success-400": "#3DDC97",
+    "danger-400": "#FF5C5C"
+  },
+  "typography": {
+    "display": "Bricolage Grotesque",
+    "body": "Instrument Sans",
+    "mono": "JetBrains Mono"
+  },
+  "built": {
+    "at": "2026-09-05T17:45:15.402Z",
+    "files": {
+      "favicon": {
+        "path": "apps/web/public/favicon.ico",
+        "bytes": 32038,
+        "sha256": "353f820a754a10a1"
+      },
+      "iconSvg": {
+        "path": "apps/web/public/icons/icon.svg",
+        "bytes": 300,
+        "sha256": "f79de203ea950d1c"
+      },
+      "icon192": {
+        "path": "apps/web/public/icons/icon-192.png",
+        "bytes": 3287,
+        "sha256": "249b4596c0230745"
+      },
+      "icon512": {
+        "path": "apps/web/public/icons/icon-512.png",
+        "bytes": 17038,
+        "sha256": "90df2d2efa9a2935"
+      },
+      "iconMaskable512": {
+        "path": "apps/web/public/icons/icon-maskable-512.png",
+        "bytes": 7402,
+        "sha256": "84783c8ca24072fa"
+      },
+      "appleTouch": {
+        "path": "apps/web/public/icons/apple-touch-icon.png",
+        "bytes": 3166,
+        "sha256": "a1b3d393e6c5a2d2"
+      },
+      "ogImage": {
+        "path": "apps/web/public/og-image.png",
+        "bytes": 127652,
+        "sha256": "fc13db54709ce5b3"
+      },
+      "logo": {
+        "path": "apps/web/public/brand/logo.svg",
+        "bytes": 748,
+        "sha256": "702a7610134b6e4e"
+      },
+      "logoLight": {
+        "path": "apps/web/public/brand/logo-light.svg",
+        "bytes": 660,
+        "sha256": "ae214c37e94baba7"
+      },
+      "logoMark": {
+        "path": "apps/web/public/brand/logo-mark.svg",
+        "bytes": 456,
+        "sha256": "a56baa1fd45e6daf"
+      },
+      "manifest": {
+        "path": "apps/web/public/site.webmanifest",
+        "bytes": 1022,
+        "sha256": "3927d36d1596d43b"
+      }
+    }
+  }
+}

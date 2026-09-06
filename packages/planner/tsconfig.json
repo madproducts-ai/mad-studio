@@ -1,0 +1,9 @@
+{
+  "extends": "../schema/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@mad/schema": ["../schema/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

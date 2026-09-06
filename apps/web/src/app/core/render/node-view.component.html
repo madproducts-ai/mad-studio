@@ -1,0 +1,412 @@
+@let n = node();
+@let props = p();
+
+<ng-template #children let-items>
+  <div class="r-children">
+    @for (child of items; track child.id) {
+      <mad-node [node]="child" [depth]="depth() + 1" />
+    }
+    @if (ctx.interactive() && dropping()) {
+      <span class="r-drop-line" [style.--r-drop-index]="ctx.dropIndex()"></span>
+    }
+    @if (ctx.interactive() && items.length === 0) {
+      <span class="r-empty">Drop components here</span>
+    }
+  </div>
+</ng-template>
+
+@switch (n.type) {
+  @case ('page') {
+    <div class="r-page" [attr.data-layout]="str(props['layout'], 'app-shell')">
+      <ng-container *ngTemplateOutlet="children; context: { $implicit: n.children }" />
+    </div>
+  }
+
+  @case ('nav') {
+    <header class="r-nav" [class.r-nav-sticky]="bool(props['sticky'], true)">
+      <span class="r-brand"><span class="r-brand-mark"></span>{{ str(props['brand'], 'Brand') }}</span>
+      <nav class="r-nav-links" aria-label="Preview navigation">
+        @for (link of navLinks(); track $index) {
+          <span class="r-nav-link">{{ link }}</span>
+        }
+      </nav>
+      <span class="r-nav-end">
+        <span class="r-icon-btn"><mad-icon name="search" [size]="14" /></span>
+        <span class="r-icon-btn"><mad-icon name="bell" [size]="14" /></span>
+        @if (str(props['cta'])) {
+          <span class="r-btn r-btn-primary r-btn-sm">{{ str(props['cta']) }}</span>
+        }
+        <span class="r-avatar r-avatar-sm">{{ initials(avatarName()) }}</span>
+      </span>
+    </header>
+  }
+
+  @case ('sidebar') {
+    <aside class="r-sidebar">
+      <span class="r-sidebar-label">Workspace</span>
+      @for (item of sidebarItems(); track $index) {
+        <span class="r-sidebar-item" [class.is-active]="$index === activeIndex()">
+          <span class="r-sidebar-dot"></span>{{ item }}
+        </span>
+      }
+      <span class="r-sidebar-spacer"></span>
+      <span class="r-sidebar-item"><span class="r-sidebar-dot"></span>Settings</span>
+    </aside>
+  }
+
+  @case ('section') {
+    <section class="r-section">
+      @if (str(props['eyebrow']) || str(props['title']) || str(props['subtitle'])) {
+        <header class="r-section-head">
+          @if (str(props['eyebrow'])) {
+            <span class="r-eyebrow">{{ str(props['eyebrow']) }}</span>
+          }
+          @if (str(props['title'])) {
+            <h2 class="r-section-title">{{ str(props['title']) }}</h2>
+          }
+          @if (str(props['subtitle'])) {
+            <p class="r-section-subtitle">{{ str(props['subtitle']) }}</p>
+          }
+        </header>
+      }
+      <ng-container *ngTemplateOutlet="children; context: { $implicit: n.children }" />
+    </section>
+  }
+
+  @case ('stack') {
+    <div class="r-stack">
+      <ng-container *ngTemplateOutlet="children; context: { $implicit: n.children }" />
+    </div>
+  }
+
+  @case ('grid') {
+    <div class="r-grid">
+      <ng-container *ngTemplateOutlet="children; context: { $implicit: n.children }" />
+    </div>
+  }
+
+  @case ('card') {
+    <div class="r-card" [class.r-card-interactive]="bool(props['interactive'])">
+      @if (str(props['title']) || str(props['subtitle'])) {
+        <div class="r-card-head">
+          <div>
+            @if (str(props['title'])) {
+              <h3 class="r-card-title">{{ str(props['title']) }}</h3>
+            }
+            @if (str(props['subtitle'])) {
+              <p class="r-card-subtitle">{{ str(props['subtitle']) }}</p>
+            }
+          </div>
+        </div>
+      }
+      <div class="r-body">
+        <ng-container *ngTemplateOutlet="children; context: { $implicit: n.children }" />
+      </div>
+    </div>
+  }
+
+  @case ('form') {
+    <form class="r-form" [attr.data-layout]="str(props['layout'], 'two-column')" (submit)="$event.preventDefault()">
+      @if (str(props['title'])) {
+        <h3 class="r-card-title">{{ str(props['title']) }}</h3>
+      }
+      <div class="r-body">
+        <ng-container *ngTemplateOutlet="children; context: { $implicit: n.children }" />
+      </div>
+      <div class="r-form-actions">
+        <span class="r-btn r-btn-ghost">Cancel</span>
+        <span class="r-btn r-btn-primary">{{ str(props['submitLabel'], 'Save') }}</span>
+      </div>
+    </form>
+  }
+
+  @case ('tabs') {
+    <div class="r-tabs">
+      <div class="r-tablist" role="tablist">
+        @for (t of tabLabels(); track $index) {
+          <span class="r-tab" role="tab" [class.is-active]="$index === activeIndex()">{{ t }}</span>
+        }
+      </div>
+      @if (n.children.length) {
+        <div class="r-tabpanel">
+          @if (n.children[activeIndex()]; as active) {
+            <mad-node [node]="active" [depth]="depth() + 1" />
+          } @else {
+            <mad-node [node]="n.children[0]!" [depth]="depth() + 1" />
+          }
+          @if (ctx.interactive() && dropping()) {
+            <span class="r-drop-line"></span>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  @case ('heading') {
+    @switch (headingTag()) {
+      @case ('h1') {
+        <h1 class="r-heading r-h1" [attr.data-weight]="str(props['weight'], 'semibold')">{{ str(props['text'], 'Heading') }}</h1>
+      }
+      @case ('h2') {
+        <h2 class="r-heading r-h2" [attr.data-weight]="str(props['weight'], 'semibold')">{{ str(props['text'], 'Heading') }}</h2>
+      }
+      @case ('h3') {
+        <h3 class="r-heading r-h3" [attr.data-weight]="str(props['weight'], 'semibold')">{{ str(props['text'], 'Heading') }}</h3>
+      }
+      @default {
+        <h4 class="r-heading r-h4" [attr.data-weight]="str(props['weight'], 'semibold')">{{ str(props['text'], 'Heading') }}</h4>
+      }
+    }
+  }
+
+  @case ('text') {
+    <p class="r-text" [attr.data-tone]="str(props['tone'], 'default')" [attr.data-size]="str(props['size'], 'md')">{{ str(props['text'], 'Text') }}</p>
+  }
+
+  @case ('button') {
+    <span
+      class="r-btn"
+      [class.r-btn-primary]="str(props['variant'], 'primary') === 'primary'"
+      [class.r-btn-secondary]="str(props['variant']) === 'secondary'"
+      [class.r-btn-ghost]="str(props['variant']) === 'ghost'"
+      [class.r-btn-danger]="str(props['variant']) === 'danger'"
+      [class.r-btn-sm]="str(props['size']) === 'sm'"
+      [class.r-btn-lg]="str(props['size']) === 'lg'"
+      [class.r-btn-full]="bool(props['fullWidth'])"
+      [class.is-disabled]="bool(props['disabled'])"
+    >
+      @if (buttonIcon(); as icon) {
+        <mad-icon [name]="icon" [size]="14" />
+      }
+      {{ str(props['label'], 'Button') }}
+    </span>
+  }
+
+  @case ('input') {
+    <label class="r-field">
+      @if (str(props['label'])) {
+        <span class="r-label">{{ str(props['label']) }}@if (bool(props['required'])) {<span class="r-required">*</span>}</span>
+      }
+      <span class="r-input" [attr.data-type]="str(props['inputType'], 'text')">
+        @if (str(props['inputType']) === 'search') {
+          <mad-icon name="search" [size]="14" />
+        }
+        <span class="r-placeholder">{{ str(props['placeholder'], 'Enter a value') }}</span>
+      </span>
+      @if (str(props['helper'])) {
+        <span class="r-helper">{{ str(props['helper']) }}</span>
+      }
+    </label>
+  }
+
+  @case ('select') {
+    <label class="r-field">
+      @if (str(props['label'])) {
+        <span class="r-label">{{ str(props['label']) }}</span>
+      }
+      <span class="r-input r-select">
+        <span>{{ options()[0] ?? 'Select…' }}</span>
+        <mad-icon name="chevron-down" [size]="14" />
+      </span>
+    </label>
+  }
+
+  @case ('toggle') {
+    <span class="r-toggle" [class.is-on]="bool(props['checked'])">
+      <span class="r-toggle-label">{{ str(props['label'], 'Toggle') }}</span>
+      <span class="r-switch"><span class="r-knob"></span></span>
+    </span>
+  }
+
+  @case ('badge') {
+    <span class="r-badge" [attr.data-tone]="str(props['tone'], 'neutral')">{{ str(props['text'], 'Badge') }}</span>
+  }
+
+  @case ('avatar') {
+    <span class="r-avatar-row">
+      <span class="r-avatar" [attr.data-size]="str(props['size'], 'md')">
+        {{ initials(avatarName()) }}
+        @if (bool(props['status'], true)) {
+          <span class="r-status"></span>
+        }
+      </span>
+      <span class="r-avatar-name">{{ avatarName() }}</span>
+    </span>
+  }
+
+  @case ('divider') {
+    <span class="r-divider">
+      @if (str(props['label'])) {
+        <span>{{ str(props['label']) }}</span>
+      }
+    </span>
+  }
+
+  @case ('image') {
+    <span class="r-image" [style.aspect-ratio]="str(props['ratio'], '16/9')" role="img" [attr.aria-label]="str(props['alt'], 'Image')">
+      <mad-icon name="image" [size]="22" />
+    </span>
+  }
+
+  @case ('stat') {
+    <div class="r-stat">
+      <span class="r-stat-label">{{ str(props['label'], 'Metric') }}</span>
+      <span class="r-stat-row">
+        <span class="r-stat-value">{{ str(props['value'], '0') }}</span>
+        @if (bool(props['sparkline'], true)) {
+          <svg class="r-spark" viewBox="0 0 72 22" preserveAspectRatio="none" aria-hidden="true">
+            <polyline [attr.points]="sparkline()" fill="none" [attr.stroke]="str(props['trend'], 'up') === 'down' ? 'var(--r-danger)' : 'var(--r-success)'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+          </svg>
+        }
+      </span>
+      @if (str(props['delta'])) {
+        <span class="r-delta" [attr.data-trend]="str(props['trend'], 'up')">
+          <mad-icon [name]="str(props['trend'], 'up') === 'down' ? 'trending-down' : str(props['trend']) === 'flat' ? 'minus' : 'trending-up'" [size]="12" />
+          {{ str(props['delta']) }}
+        </span>
+      }
+    </div>
+  }
+
+  @case ('chart') {
+    <div class="r-chart">
+      @if (str(props['title'])) {
+        <span class="r-chart-title">{{ str(props['title']) }}</span>
+      }
+      <mad-chart [seed]="n.id" [kind]="$any(str(props['kind'], 'line'))" [labels]="chartSeries()" [points]="num(props['points'], 12)" />
+    </div>
+  }
+
+  @case ('table') {
+    <div class="r-table-wrap">
+      @if (str(props['title'])) {
+        <div class="r-table-head">
+          <span class="r-card-title">{{ str(props['title']) }}</span>
+          <span class="r-table-count">{{ tableRows().length }} rows</span>
+        </div>
+      }
+      <table class="r-table" [class.is-striped]="bool(props['striped'])">
+        <thead>
+          <tr>
+            @if (bool(props['selectable'])) {
+              <th class="r-th-check"><span class="r-check"></span></th>
+            }
+            @for (c of tableColumns(); track $index) {
+              <th>{{ c }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of tableRows(); track $index) {
+            <tr>
+              @if (bool(props['selectable'])) {
+                <td class="r-th-check"><span class="r-check"></span></td>
+              }
+              @for (cell of row; track $index) {
+                <td>
+                  @if (tableColumns()[$index]?.toLowerCase().includes('status')) {
+                    <span class="r-badge r-badge-inline" [attr.data-tone]="cell === 'Active' || cell === 'Synced' ? 'success' : cell === 'Past due' || cell === 'Churn risk' ? 'danger' : cell === 'Trial' || cell === 'Pending' ? 'warning' : 'neutral'">{{ cell }}</span>
+                  } @else {
+                    {{ cell }}
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @case ('list') {
+    @if (bool(props['ordered'])) {
+      <ol class="r-list r-list-ordered">
+        @for (item of listItems(); track $index) {
+          <li>{{ item }}</li>
+        }
+      </ol>
+    } @else {
+      <ul class="r-list">
+        @for (item of listItems(); track $index) {
+          <li><span class="r-list-dot"></span>{{ item }}</li>
+        }
+      </ul>
+    }
+  }
+
+  @case ('kanban') {
+    <div class="r-kanban">
+      @for (col of kanban(); track $index) {
+        <div class="r-kanban-col">
+          <span class="r-kanban-head">{{ col.title }}<span class="r-kanban-count">{{ col.cards.length }}</span></span>
+          @for (c of col.cards; track $index) {
+            <div class="r-kanban-card">
+              <span class="r-kanban-tag">{{ c.tag }}</span>
+              <span class="r-kanban-title">{{ c.title }}</span>
+              <span class="r-kanban-meta"><span class="r-avatar r-avatar-xs">{{ initials(c.assignee) }}</span><span class="r-badge r-badge-inline" [attr.data-tone]="c.priority === 'P0' ? 'danger' : c.priority === 'P1' ? 'warning' : 'neutral'">{{ c.priority }}</span></span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  @case ('chat') {
+    <div class="r-chat">
+      <div class="r-chat-head">
+        <span class="r-avatar r-avatar-sm">{{ initials(chat()[0]?.name ?? 'C') }}</span>
+        <span class="r-chat-who">
+          <span class="r-chat-name">{{ chat()[0]?.name }}</span>
+          @if (bool(props['showStatus'], true)) {
+            <span class="r-chat-status"><span class="r-online"></span>Online · replied {{ chat()[2]?.time }}</span>
+          }
+        </span>
+        <span class="r-icon-btn"><mad-icon name="info" [size]="14" /></span>
+      </div>
+      <div class="r-chat-body">
+        @for (m of chat(); track $index) {
+          <div class="r-msg" [attr.data-from]="m.from">
+            <span class="r-msg-bubble">{{ m.text }}</span>
+            <span class="r-msg-meta">{{ m.from === 'agent' ? m.name : '' }} {{ m.time }}</span>
+          </div>
+        }
+      </div>
+      <div class="r-chat-composer">
+        <span class="r-placeholder">{{ str(props['placeholder'], 'Type a reply…') }}</span>
+        <span class="r-btn r-btn-primary r-btn-sm"><mad-icon name="arrow-right" [size]="14" /></span>
+      </div>
+    </div>
+  }
+
+  @case ('timeline') {
+    <ol class="r-timeline">
+      @for (e of timelineEvents(); track $index) {
+        <li>
+          <span class="r-tl-dot" [class.is-live]="$index === 0"></span>
+          <span class="r-tl-text">{{ e }}</span>
+          <span class="r-tl-time">{{ $index === 0 ? 'just now' : $index * 12 + 'm ago' }}</span>
+        </li>
+      }
+    </ol>
+  }
+
+  @case ('pricing') {
+    <div class="r-pricing">
+      @for (t of pricingTiers(); track t.name) {
+        <div class="r-price-card" [class.is-highlight]="t.highlight">
+          @if (t.highlight) {
+            <span class="r-badge r-badge-inline" data-tone="info">Most popular</span>
+          }
+          <span class="r-price-name">{{ t.name }}</span>
+          <span class="r-price"><span class="r-price-amount">{{ t.price }}</span><span class="r-price-period">{{ t.period }}</span></span>
+          <ul class="r-list r-price-features">
+            @for (f of t.features; track $index) {
+              <li><mad-icon name="check" [size]="12" />{{ f }}</li>
+            }
+          </ul>
+          <span class="r-btn" [class.r-btn-primary]="t.highlight" [class.r-btn-secondary]="!t.highlight">Choose {{ t.name }}</span>
+        </div>
+      }
+    </div>
+  }
+}

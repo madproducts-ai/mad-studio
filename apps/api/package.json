@@ -1,0 +1,36 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MAD Studio API — NestJS + Drizzle ORM + PostgreSQL. Generation planner, document store, integrations and deployments.",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/main.js",
+    "start:dev": "tsx watch --clear-screen=false src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "@mad/planner": "*",
+    "@mad/schema": "*",
+    "@nestjs/common": "^11.1.0",
+    "@nestjs/core": "^11.1.0",
+    "@nestjs/platform-express": "^11.1.0",
+    "drizzle-orm": "^0.45.0",
+    "helmet": "^8.1.0",
+    "postgres": "^3.4.5",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "~7.8.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.0",
+    "vitest": "^4.0.8"
+  }
+}

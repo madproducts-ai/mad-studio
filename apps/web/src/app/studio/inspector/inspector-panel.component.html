@@ -1,0 +1,238 @@
+@let n = node();
+
+<header class="border-b border-line p-3">
+  <div class="flex items-center gap-2">
+    <span class="flex size-7 shrink-0 items-center justify-center rounded-md border border-line bg-raised text-signal">
+      <mad-icon [name]="typeIcon()" [size]="14" />
+    </span>
+    <input
+      class="min-w-0 flex-1 rounded-md bg-transparent px-1.5 py-1 text-[0.85rem] font-semibold outline-none hover:bg-hover focus:bg-raised focus:ring-1 focus:ring-signal"
+      [value]="n.name"
+      aria-label="Component name"
+      spellcheck="false"
+      (change)="store.renameNode(n.id, $any($event.target).value)"
+      (keydown.enter)="$any($event.target).blur()"
+    />
+    <button type="button" class="btn btn-ghost btn-icon size-7" aria-label="Close inspector" (click)="store.inspectorOpen.set(false)"><mad-icon name="x" [size]="14" /></button>
+  </div>
+  <div class="mt-2 flex items-center gap-1.5 text-[0.66rem] text-ink-4">
+    <span class="mono rounded border border-line px-1.5 py-0.5">{{ n.type }}</span>
+    <span class="rounded border border-line px-1.5 py-0.5">{{ sourceLabel() }}</span>
+    <span class="mono ml-auto truncate">{{ n.id }}</span>
+  </div>
+  <div class="mt-2.5 flex items-center gap-1">
+    <button type="button" class="tool" [attr.aria-label]="n.locked ? 'Unlock' : 'Lock'" [title]="n.locked ? 'Unlock' : 'Lock'" (click)="store.toggleLock(n.id)"><mad-icon [name]="n.locked ? 'lock' : 'unlock'" [size]="14" /></button>
+    <button type="button" class="tool" [attr.aria-label]="n.style.hidden ? 'Show' : 'Hide'" [title]="n.style.hidden ? 'Show' : 'Hide'" (click)="store.toggleHidden(n.id)"><mad-icon [name]="n.style.hidden ? 'eye-off' : 'eye'" [size]="14" /></button>
+    <button type="button" class="tool" aria-label="Move up (Alt+↑)" title="Move up (Alt+↑)" (click)="store.moveWithinParent(n.id, -1)" [disabled]="!store.selectedParent()"><mad-icon name="move-up" [size]="14" /></button>
+    <button type="button" class="tool" aria-label="Move down (Alt+↓)" title="Move down (Alt+↓)" (click)="store.moveWithinParent(n.id, 1)" [disabled]="!store.selectedParent()"><mad-icon name="move-down" [size]="14" /></button>
+    <button type="button" class="tool" aria-label="Duplicate (Ctrl+D)" title="Duplicate (Ctrl+D)" (click)="store.duplicate(n.id)" [disabled]="!store.selectedParent()"><mad-icon name="copy" [size]="14" /></button>
+    <button type="button" class="tool ml-auto text-danger hover:bg-danger/10" aria-label="Delete (Del)" title="Delete (Del)" (click)="store.remove(n.id)" [disabled]="!store.selectedParent() || n.locked"><mad-icon name="trash" [size]="14" /></button>
+  </div>
+</header>
+
+<div role="tablist" aria-label="Inspector sections" class="flex gap-1 border-b border-line px-3 pt-2">
+  <button type="button" role="tab" class="tab" [class.is-active]="tab() === 'content'" [attr.aria-selected]="tab() === 'content'" (click)="tab.set('content')">Content</button>
+  <button type="button" role="tab" class="tab" [class.is-active]="tab() === 'layout'" [attr.aria-selected]="tab() === 'layout'" (click)="tab.set('layout')">Layout & style</button>
+</div>
+
+<div class="min-h-0 flex-1 overflow-y-auto">
+  @if (tab() === 'content') {
+    @if (groups().length === 0) {
+      <p class="p-4 text-[0.76rem] text-ink-4">This container has no content properties. Use Layout & style, or select one of its children.</p>
+    }
+    @for (g of groups(); track g.id) {
+      <section class="group-section">
+        <h3 class="group-title">{{ g.label }}</h3>
+        @for (c of g.controls; track c.key) {
+          <div class="control">
+            <label class="control-label" [for]="'p-' + n.id + '-' + c.key">{{ c.label }}</label>
+            @switch (c.kind) {
+              @case ('text') {
+                <input [id]="'p-' + n.id + '-' + c.key" class="field h-8 text-[0.78rem]" type="text" [value]="text(c.key)" [placeholder]="c.placeholder || ''" (input)="setProp(c.key, $any($event.target).value)" />
+              }
+              @case ('textarea') {
+                <textarea [id]="'p-' + n.id + '-' + c.key" class="field min-h-[72px] resize-y py-1.5 text-[0.78rem] leading-snug" rows="3" [value]="text(c.key)" (input)="setProp(c.key, $any($event.target).value)"></textarea>
+              }
+              @case ('number') {
+                <div class="flex items-center gap-2">
+                  <input [id]="'p-' + n.id + '-' + c.key" class="field h-8 w-20 text-[0.78rem] mono" type="number" [min]="c.min ?? null" [max]="c.max ?? null" [step]="c.step ?? 1" [value]="num(c.key)" (input)="setNumberProp(c.key, $any($event.target).value, c)" />
+                  <input class="range flex-1" type="range" [min]="c.min ?? 0" [max]="c.max ?? 100" [step]="c.step ?? 1" [value]="num(c.key)" [attr.aria-label]="c.label + ' slider'" (input)="setNumberProp(c.key, $any($event.target).value, c)" />
+                </div>
+              }
+              @case ('select') {
+                <div class="segmented" role="radiogroup" [attr.aria-label]="c.label">
+                  @for (o of c.options ?? []; track o) {
+                    <button type="button" role="radio" class="seg-opt" [class.is-active]="text(c.key) === o" [attr.aria-checked]="text(c.key) === o" (click)="setSelect(c.key, o)">{{ o }}</button>
+                  }
+                </div>
+              }
+              @case ('toggle') {
+                <button type="button" role="switch" class="switch" [attr.aria-checked]="bool(c.key)" [class.is-on]="bool(c.key)" [id]="'p-' + n.id + '-' + c.key" (click)="setProp(c.key, !bool(c.key))">
+                  <span class="knob"></span>
+                </button>
+              }
+              @case ('icon') {
+                <div class="flex flex-wrap gap-1">
+                  @for (o of iconOptions; track o) {
+                    <button type="button" class="icon-opt" [class.is-active]="text(c.key) === o" [attr.aria-label]="o || 'No icon'" [title]="o || 'None'" (click)="setProp(c.key, o)">
+                      @if (o === '') {
+                        <mad-icon name="minus" [size]="13" />
+                      } @else {
+                        <mad-icon [name]="$any(o === 'arrow' ? 'arrow-right' : o === 'external' ? 'external-link' : o === 'cart' ? 'shopping-cart' : o)" [size]="13" />
+                      }
+                    </button>
+                  }
+                </div>
+              }
+              @case ('list') {
+                <textarea [id]="'p-' + n.id + '-' + c.key" class="field mono min-h-[88px] resize-y py-1.5 text-[0.74rem] leading-relaxed" rows="4" [value]="list(c.key)" [placeholder]="c.help || 'One per line'" (change)="setList(c.key, $any($event.target).value)"></textarea>
+                <span class="text-[0.62rem] text-ink-4">{{ listCount(c.key) }} items · one per line, applies on blur</span>
+              }
+              @case ('records') {
+                <p class="text-[0.7rem] text-ink-4">Structured records are edited through the data connection.</p>
+              }
+              @default {
+                <input class="field h-8 text-[0.78rem]" type="text" [value]="text(c.key)" (input)="setProp(c.key, $any($event.target).value)" />
+              }
+            }
+            @if (c.help && c.kind !== 'list') {
+              <span class="text-[0.62rem] text-ink-4">{{ c.help }}</span>
+            }
+          </div>
+        }
+      </section>
+    }
+  } @else {
+    <section class="group-section">
+      <h3 class="group-title">Spacing</h3>
+      <div class="control">
+        <div class="flex items-center justify-between">
+          <span class="control-label">Padding</span>
+          <button type="button" class="tool size-6" [class.is-on]="padLinked()" aria-label="Link all sides" title="Link all sides" (click)="padLinked.set(!padLinked())">
+            <mad-icon [name]="padLinked() ? 'lock' : 'unlock'" [size]="12" />
+          </button>
+        </div>
+        <div class="grid grid-cols-4 gap-1.5">
+          @for (s of sides; track s) {
+            <label class="flex flex-col gap-0.5">
+              <span class="text-[0.58rem] uppercase tracking-wider text-ink-4">{{ s.charAt(0) }}</span>
+              <input class="field mono h-8 px-1.5 text-center text-[0.74rem]" type="number" min="0" max="160" [value]="pad(s)" [attr.aria-label]="'Padding ' + s" (input)="setPad(s, $any($event.target).value, padLinked())" />
+            </label>
+          }
+        </div>
+      </div>
+      @if (isContainer() || n.type === 'stack' || n.type === 'grid' || n.type === 'section' || n.type === 'tabs' || n.type === 'card' || n.type === 'form') {
+        <div class="control">
+          <span class="control-label">Gap</span>
+          <div class="flex items-center gap-2">
+            <input class="field mono h-8 w-20 text-[0.78rem]" type="number" min="0" max="96" [value]="style().gap ?? 16" aria-label="Gap" (input)="setNum('gap', $any($event.target).value, 0, 96)" />
+            <input class="range flex-1" type="range" min="0" max="96" [value]="style().gap ?? 16" aria-label="Gap slider" (input)="setNum('gap', $any($event.target).value, 0, 96)" />
+          </div>
+        </div>
+      }
+      <div class="control">
+        <span class="control-label">Radius</span>
+        <div class="flex items-center gap-2">
+          <input class="field mono h-8 w-20 text-[0.78rem]" type="number" min="0" max="48" [value]="style().radius ?? 0" aria-label="Radius" (input)="setNum('radius', $any($event.target).value, 0, 48)" />
+          <input class="range flex-1" type="range" min="0" max="48" [value]="style().radius ?? 0" aria-label="Radius slider" (input)="setNum('radius', $any($event.target).value, 0, 48)" />
+        </div>
+      </div>
+    </section>
+
+    <section class="group-section">
+      <h3 class="group-title">Layout</h3>
+      <div class="control">
+        <span class="control-label">Width</span>
+        <div class="segmented" role="radiogroup" aria-label="Width">
+          @for (w of ['auto', 'full', 'content', '1/2', '1/3', '2/3']; track w) {
+            <button type="button" role="radio" class="seg-opt" [class.is-active]="(style().width ?? 'auto') === w" [attr.aria-checked]="(style().width ?? 'auto') === w" (click)="setStyle({ width: $any(w) })">{{ w }}</button>
+          }
+        </div>
+      </div>
+      @if (n.type === 'stack') {
+        <div class="control">
+          <span class="control-label">Direction</span>
+          <div class="segmented" role="radiogroup" aria-label="Direction">
+            <button type="button" role="radio" class="seg-opt" [class.is-active]="(style().direction ?? 'column') === 'column'" [attr.aria-checked]="(style().direction ?? 'column') === 'column'" (click)="setStyle({ direction: 'column' })">Column</button>
+            <button type="button" role="radio" class="seg-opt" [class.is-active]="style().direction === 'row'" [attr.aria-checked]="style().direction === 'row'" (click)="setStyle({ direction: 'row' })">Row</button>
+          </div>
+        </div>
+        <div class="control">
+          <span class="control-label">Align</span>
+          <div class="segmented" role="radiogroup" aria-label="Align">
+            @for (a of ['start', 'center', 'end', 'stretch']; track a) {
+              <button type="button" role="radio" class="seg-opt" [class.is-active]="(style().align ?? 'stretch') === a" [attr.aria-checked]="(style().align ?? 'stretch') === a" (click)="setStyle({ align: $any(a) })">{{ a }}</button>
+            }
+          </div>
+        </div>
+        <div class="control">
+          <span class="control-label">Justify</span>
+          <div class="segmented" role="radiogroup" aria-label="Justify">
+            @for (j of ['start', 'center', 'end', 'between']; track j) {
+              <button type="button" role="radio" class="seg-opt" [class.is-active]="(style().justify ?? 'start') === j" [attr.aria-checked]="(style().justify ?? 'start') === j" (click)="setStyle({ justify: $any(j) })">{{ j }}</button>
+            }
+          </div>
+        </div>
+      }
+      @if (n.type === 'grid') {
+        <div class="control">
+          <span class="control-label">Columns</span>
+          <div class="flex items-center gap-2">
+            <input class="field mono h-8 w-20 text-[0.78rem]" type="number" min="1" max="12" [value]="style().columns ?? 2" aria-label="Columns" (input)="setNum('columns', $any($event.target).value, 1, 12)" />
+            <input class="range flex-1" type="range" min="1" max="12" [value]="style().columns ?? 2" aria-label="Columns slider" (input)="setNum('columns', $any($event.target).value, 1, 12)" />
+          </div>
+        </div>
+      }
+    </section>
+
+    <section class="group-section">
+      <h3 class="group-title">Appearance</h3>
+      <div class="control">
+        <span class="control-label">Background</span>
+        <div class="flex flex-wrap gap-1.5">
+          @for (s of swatches; track s.value) {
+            <button
+              type="button"
+              class="swatch"
+              [class.is-active]="(style().background ?? '') === s.value"
+              [style.background]="s.value === '' ? 'linear-gradient(135deg, var(--mad-raised), var(--mad-panel))' : s.value === 'transparent' ? 'repeating-conic-gradient(var(--mad-line) 0 25%, transparent 0 50%) 0 0 / 8px 8px' : s.value"
+              [attr.aria-label]="s.label"
+              [title]="s.label"
+              (click)="setBackground(s.value)"
+            ></button>
+          }
+          <label class="swatch relative overflow-hidden" title="Custom colour">
+            <input type="color" class="absolute inset-0 size-full cursor-pointer opacity-0" [value]="isValidHex(style().background ?? '') ? style().background : '#181C26'" aria-label="Custom background colour" (input)="onCustomColor($any($event.target).value)" />
+            <span class="pointer-events-none absolute inset-0 flex items-center justify-center text-ink-3"><mad-icon name="plus" [size]="12" /></span>
+          </label>
+        </div>
+        <input class="field mono mt-1.5 h-8 text-[0.74rem]" type="text" placeholder="#RRGGBB" [value]="style().background ?? ''" aria-label="Background hex" (change)="onCustomColor($any($event.target).value)" />
+      </div>
+      <div class="control">
+        <div class="flex items-center justify-between">
+          <span class="control-label">Border</span>
+          <button type="button" role="switch" class="switch" [attr.aria-checked]="style().border === true" [class.is-on]="style().border === true" (click)="setStyle({ border: !(style().border === true) })"><span class="knob"></span></button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control-label">Shadow</span>
+        <div class="segmented" role="radiogroup" aria-label="Shadow">
+          @for (s of ['none', 'sm', 'md', 'lg']; track s) {
+            <button type="button" role="radio" class="seg-opt" [class.is-active]="(style().shadow ?? 'none') === s" [attr.aria-checked]="(style().shadow ?? 'none') === s" (click)="setStyle({ shadow: $any(s) })">{{ s }}</button>
+          }
+        </div>
+      </div>
+      <div class="control">
+        <div class="flex items-center justify-between">
+          <span class="control-label">Hidden</span>
+          <button type="button" role="switch" class="switch" [attr.aria-checked]="style().hidden === true" [class.is-on]="style().hidden === true" (click)="store.toggleHidden(n.id)"><span class="knob"></span></button>
+        </div>
+      </div>
+    </section>
+  }
+</div>
+
+<footer class="flex items-center justify-between border-t border-line px-3 py-2 text-[0.64rem] text-ink-4">
+  <span>{{ n.children.length }} children</span>
+  <span class="flex items-center gap-1"><kbd class="kbd">Del</kbd> remove <kbd class="kbd ml-1">Ctrl</kbd><kbd class="kbd">D</kbd> duplicate</span>
+</footer>

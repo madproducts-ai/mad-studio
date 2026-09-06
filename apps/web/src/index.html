@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>MAD Studio — Prompt to production in under 60 seconds</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="MAD Studio is the AI-native platform to generate, visually edit, and deploy production-ready web and mobile applications. Type a prompt, get a live app, fine-tune every component." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B0D12" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F6F7FA" />
+    <meta name="application-name" content="MAD Studio" />
+    <meta name="apple-mobile-web-app-title" content="MAD Studio" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="canonical" href="https://studio.madproducts.ai/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MAD Studio" />
+    <meta property="og:url" content="https://studio.madproducts.ai/" />
+    <meta property="og:title" content="MAD Studio — Prompt to production in under 60 seconds" />
+    <meta property="og:description" content="Generate, visually edit, and deploy production-ready web and mobile apps from a single prompt." />
+    <meta property="og:image" content="https://studio.madproducts.ai/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="MAD Studio: Prompt to production in under 60 seconds." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MAD Studio — Prompt to production in under 60 seconds" />
+    <meta name="twitter:description" content="Generate, visually edit, and deploy production-ready web and mobile apps from a single prompt." />
+    <meta name="twitter:image" content="https://studio.madproducts.ai/og-image.png" />
+
+    <link rel="icon" href="favicon.ico" sizes="48x48" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="manifest" href="site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+    <script>
+      // Apply the persisted theme before first paint to avoid a flash.
+      try {
+        var t = localStorage.getItem('mad:theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <app-root></app-root>
+    <noscript>
+      <div style="font-family: system-ui, sans-serif; padding: 2rem; color: #e7eaf0; background: #0b0d12; min-height: 100vh">
+        <strong>MAD Studio</strong> needs JavaScript to run the studio canvas.
+      </div>
+    </noscript>
+  </body>
+</html>

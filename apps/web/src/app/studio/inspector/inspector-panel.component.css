@@ -1,0 +1,143 @@
+:host {
+  animation: inspector-in 0.3s var(--ease-out-expo) both;
+}
+@keyframes inspector-in {
+  from { opacity: 0; transform: translateX(8px); }
+}
+
+.tool {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--mad-ink-3);
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.35s var(--ease-spring);
+}
+.tool:hover:not(:disabled) { background: var(--mad-hover); color: var(--mad-ink); }
+.tool:active:not(:disabled) { transform: scale(0.92); }
+.tool:disabled { opacity: 0.35; cursor: not-allowed; }
+.tool.is-on { color: var(--mad-signal); background: color-mix(in oklab, var(--mad-signal) 12%, transparent); }
+
+.tab {
+  position: relative;
+  padding: 6px 10px 9px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--mad-ink-3);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s ease;
+}
+.tab:hover { color: var(--mad-ink); }
+.tab.is-active { color: var(--mad-ink); border-bottom-color: var(--mad-ember); }
+
+.group-section { padding: 12px 12px 6px; border-bottom: 1px solid var(--mad-line); }
+.group-section:last-child { border-bottom: 0; }
+.group-title {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--mad-ink-4);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.control { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.control-label { font-size: 0.72rem; font-weight: 500; color: var(--mad-ink-2); }
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--mad-line);
+  background: var(--mad-bg);
+}
+.seg-opt {
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  color: var(--mad-ink-3);
+  text-transform: capitalize;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.seg-opt:hover { color: var(--mad-ink); }
+.seg-opt.is-active { background: var(--mad-raised); color: var(--mad-ink); box-shadow: inset 0 0 0 1px var(--mad-line-strong); }
+
+.switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--mad-line-strong);
+  transition: background-color 0.2s ease;
+}
+.switch .knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--mad-ink);
+  transition: transform 0.4s var(--ease-spring);
+}
+.switch.is-on { background: var(--mad-ember); }
+.switch.is-on .knob { transform: translateX(14px); background: var(--mad-ember-ink); }
+
+.icon-opt {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid var(--mad-line);
+  background: var(--mad-bg);
+  color: var(--mad-ink-3);
+}
+.icon-opt:hover { border-color: var(--mad-line-strong); color: var(--mad-ink); }
+.icon-opt.is-active { border-color: var(--mad-signal); color: var(--mad-signal); }
+
+.swatch {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--mad-line-strong);
+  transition: transform 0.35s var(--ease-spring), box-shadow 0.15s ease;
+}
+.swatch:hover { transform: scale(1.08); }
+.swatch.is-active { box-shadow: 0 0 0 2px var(--mad-bg), 0 0 0 4px var(--mad-signal); }
+
+.range {
+  appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--mad-line-strong);
+  outline: none;
+}
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--mad-ink);
+  border: 2px solid var(--mad-panel);
+  box-shadow: 0 0 0 1px var(--mad-line-strong);
+  transition: transform 0.3s var(--ease-spring);
+}
+.range::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--mad-ink);
+  border: 2px solid var(--mad-panel);
+}
+.range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in oklab, var(--mad-signal) 40%, transparent); }
