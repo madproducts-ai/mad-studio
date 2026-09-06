@@ -124,11 +124,17 @@ export class ModelPlanner {
     if (error instanceof Anthropic.BadRequestError) return `the Anthropic API rejected the request (${error.message.slice(0, 120)})`;
     if (error instanceof Anthropic.APIError) return `Anthropic API error ${error.status ?? ''}`.trim();
     if (error instanceof Error && error.name === 'AbortError') return 'the request was cancelled';
+    // Structured output that is truncated or violates the schema throws here rather
+    // than arriving as a null parse. It is an ordinary outcome, not a crash: the
+    // heuristic planner takes over and another attempt may well succeed.
+    if (error instanceof Anthropic.AnthropicError) return 'the model returned an unusable specification (truncated or off-contract)';
     this.logger.warn(`Unexpected planner failure: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
     return error instanceof Error ? error.message.slice(0, 160) : 'unknown error';
   }
 
   private isRetryable(error: unknown): boolean {
+    // A rejected key, a model the key cannot use, or a malformed request will fail
+    // again identically; everything else is worth another attempt.
     if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError || error instanceof Anthropic.BadRequestError) return false;
     return true;
   }
