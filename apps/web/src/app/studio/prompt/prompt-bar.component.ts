@@ -64,7 +64,7 @@ import { StudioStore } from '../state/studio.store';
           rows="1"
           [value]="store.prompt()"
           [placeholder]="placeholder()"
-          [disabled]="store.generating()"
+          [disabled]="store.generating() || store.preparing()"
           aria-label="Describe what to build"
           spellcheck="false"
           (input)="onInput($any($event.target))"
@@ -77,7 +77,7 @@ import { StudioStore } from '../state/studio.store';
           <mad-icon name="square" [size]="13" /> Stop
         </button>
       } @else {
-        <button type="submit" class="btn btn-primary h-10 gap-1.5" [disabled]="store.prompt().trim().length < 4">
+        <button type="submit" class="btn btn-primary h-10 gap-1.5" [disabled]="store.preparing() || store.prompt().trim().length < 4">
           {{ store.root() ? 'Rebuild' : 'Build' }}
           <mad-icon name="corner-down-left" [size]="14" />
         </button>
@@ -127,7 +127,7 @@ export class PromptBar {
   protected async submit(event?: Event): Promise<void> {
     event?.preventDefault();
     const text = this.store.prompt().trim();
-    if (text.length < 4 || this.store.generating()) return;
+    if (text.length < 4 || this.store.generating() || this.store.preparing()) return;
     const el = this.input().nativeElement;
     el.style.height = 'auto';
     await this.store.generate(text, { intoCurrentProject: this.store.root() !== null && !this.store.isLocal() });

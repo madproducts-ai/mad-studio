@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { Deployment, DesignSystem, Device } from '@mad/schema';
 import { Icon, type IconName } from '../../core/ui/icon.component';
@@ -16,7 +16,7 @@ import { StudioStore } from '../state/studio.store';
     <a routerLink="/" class="flex size-8 items-center justify-center rounded-lg hover:bg-hover" aria-label="Back to home">
       <img src="brand/logo-mark.svg" width="22" height="22" alt="" class="size-[22px] rounded-md" />
     </a>
-    <span class="text-line-strong">/</span>
+    <span class="text-line-strong" aria-hidden="true">/</span>
     <div class="flex min-w-0 items-center gap-2">
       <input
         class="project-name min-w-[6ch] max-w-[26ch] rounded-md bg-transparent px-1.5 py-1 text-step--1 font-semibold text-ink outline-none hover:bg-hover focus:bg-raised focus:ring-1 focus:ring-signal"
@@ -81,7 +81,7 @@ import { StudioStore } from '../state/studio.store';
       <button type="button" class="btn btn-ghost btn-icon" aria-label="Toggle studio theme" (click)="theme.toggle()"><mad-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="15" /></button>
       <button type="button" class="btn btn-ghost btn-sm gap-1.5" (click)="share()" [disabled]="!store.projectId()"><mad-icon name="copy" [size]="14" /> Share</button>
       <div class="relative">
-        <button type="button" class="btn btn-primary btn-sm gap-1.5" [disabled]="!store.root() || store.deploying() || store.generating()" (click)="deployOpen.set(!deployOpen())" [attr.aria-expanded]="deployOpen()">
+        <button #deployTrigger type="button" class="btn btn-primary btn-sm gap-1.5" [disabled]="!store.root() || store.deploying() || store.generating()" (click)="deployOpen.set(!deployOpen())" [attr.aria-expanded]="deployOpen()" aria-controls="deploy-menu">
           @if (store.deploying()) {
             <mad-icon name="loader" [size]="14" class="animate-spin" /> Deploying
           } @else {
@@ -89,7 +89,7 @@ import { StudioStore } from '../state/studio.store';
           }
         </button>
         @if (deployOpen()) {
-          <div class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" role="menu">
+          <div id="deploy-menu" class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" role="group" aria-label="Deploy targets and recent deployments">
             <button type="button" class="menu-item" (click)="deploy('preview')">
               <mad-icon name="eye" [size]="14" />
               <span><b>Preview</b><small>Immutable snapshot of v{{ store.documentVersion() }} with its own URL</small></span>
@@ -122,11 +122,11 @@ import { StudioStore } from '../state/studio.store';
       @if (store.apiConfigured && store.mode() === 'api') {
         <div class="relative ml-1">
           @if (store.signedIn()) {
-            <button type="button" class="avatar" (click)="accountOpen.set(!accountOpen())" [attr.aria-expanded]="accountOpen()" aria-label="Account menu" [title]="store.account()?.email ?? 'Account'">
+            <button #accountTrigger type="button" class="avatar" (click)="accountOpen.set(!accountOpen())" [attr.aria-expanded]="accountOpen()" aria-controls="account-menu" aria-label="Account" [title]="store.account()?.email ?? 'Account'">
               {{ auth.initials() }}
             </button>
             @if (accountOpen()) {
-              <div class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" role="menu">
+              <div id="account-menu" class="menu glass absolute right-0 top-[calc(100%+6px)] z-40 w-64 rounded-xl p-1.5 shadow-float" role="group" aria-label="Account">
                 <div class="px-2.5 py-2">
                   <b class="block truncate text-[0.8rem] font-semibold text-ink">{{ store.account()?.displayName }}</b>
                   <small class="block truncate text-[0.68rem] text-ink-4">{{ store.account()?.email }}</small>
@@ -177,6 +177,8 @@ export class StudioTopbar {
   protected readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly deployTrigger = viewChild<ElementRef<HTMLButtonElement>>('deployTrigger');
+  private readonly accountTrigger = viewChild<ElementRef<HTMLButtonElement>>('accountTrigger');
   protected readonly Math = Math;
   protected readonly deployOpen = signal(false);
   protected readonly accountOpen = signal(false);
@@ -255,8 +257,11 @@ export class StudioTopbar {
 
   @HostListener('document:keydown.escape')
   protected onEscape(): void {
+    // Closing must not strand focus on a removed element.
+    const returnTo = this.deployOpen() ? this.deployTrigger() : this.accountOpen() ? this.accountTrigger() : null;
     this.deployOpen.set(false);
     this.accountOpen.set(false);
+    returnTo?.nativeElement.focus();
   }
 
   /** Wording for a deployment with no URL to open. */

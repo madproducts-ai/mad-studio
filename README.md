@@ -125,7 +125,7 @@ Switches: `-SkipBuild`, `-SkipInstall`, `-SkipMigrate`. `deploy\test-mad-deploy.
 set on any Node 22+ host with PostgreSQL reachable.
 ## Accessibility
 
-`npm run check:contrast` renders a generated application through the static exporter in every design system and theme, at desktop and phone widths, and measures each piece of text against the background it actually sits on. Anything below WCAG AA fails the command, and CI runs it on every push. The exporter's stylesheet is generated from the studio's canvas CSS, so the gate covers the editor as well as deployed pages.
+`npm run check:contrast` measures each piece of text against the background it actually sits on and fails on anything below WCAG AA. It covers two surfaces: a generated application rendered through the static exporter in every design system and theme at desktop and phone widths, and the studio's own interface (landing and editor) in both themes, served from `apps/web/dist`. Sixteen renderings in total. CI runs it on every push, after the build.
 
 ## Environment
 

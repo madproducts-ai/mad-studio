@@ -157,6 +157,8 @@ export class StudioStore {
   });
   readonly tokens = signal<{ input: number; output: number } | null>(null);
   readonly statusMessage = signal('');
+  /** True between submitting a prompt and the build actually starting (connectivity probe, sign-in). */
+  readonly preparing = signal(false);
   readonly reconnecting = signal(false);
   private stream: GenerationStream | null = null;
   private offline: OfflineRunner | null = null;
@@ -344,10 +346,26 @@ export class StudioStore {
 
   async generate(prompt: string, options: { designSystem?: DesignSystem; intoCurrentProject?: boolean } = {}): Promise<void> {
     const text = prompt.trim();
-    if (text.length < 4 || this.generating()) return;
+    if (text.length < 4 || this.generating() || this.preparing()) return;
     const designSystem = options.designSystem ?? this.designSystem();
     const keepProject = options.intoCurrentProject === true && this.projectId() !== null && !this.isLocal();
     const currentProjectId = this.projectId();
+
+    // Settle connectivity and the session first. Asking for a password is not
+    // building: entering the build state here would show a running timer and a
+    // Stop button for work that has not started, and would leave the canvas
+    // blank behind the sign-in sheet.
+    this.preparing.set(true);
+    let useApi: boolean;
+    try {
+      const mode = await this.probe(true);
+      useApi = mode === 'api';
+      if (useApi && !this.signedIn()) {
+        useApi = await this.auth.requireSession();
+      }
+    } finally {
+      this.preparing.set(false);
+    }
 
     this.resetDocumentState();
     if (keepProject && currentProjectId) this.projectId.set(currentProjectId);
@@ -358,14 +376,7 @@ export class StudioStore {
     this.statusMessage.set('Connecting');
     this.startTicker();
     this.log('info', `Prompt: "${text}"`);
-
-    const mode = await this.probe(true);
-    let useApi = mode === 'api';
-    if (useApi && !this.signedIn()) {
-      this.statusMessage.set('Sign in to continue');
-      useApi = await this.auth.requireSession();
-      if (!useApi) this.log('info', 'Continuing without an account: this build runs in your browser and saves locally.');
-    }
+    if (!useApi && this.signedIn() === false && this.apiConfigured) this.log('info', 'Continuing without an account: this build runs in your browser and saves locally.');
     if (useApi) {
       try {
         const created = await this.api.createGeneration({ prompt: text, designSystem, ...(keepProject && currentProjectId ? { projectId: currentProjectId } : {}) });
@@ -410,7 +421,7 @@ export class StudioStore {
     // Offline: run the planner locally, persist to this browser.
     const localId = keepProject && currentProjectId?.startsWith('local-') ? currentProjectId : `local-${Date.now().toString(36)}`;
     this.projectId.set(localId);
-    if (mode !== 'api') this.log(this.apiConfigured ? 'warn' : 'info', `${this.apiConfigured ? 'API unreachable.' : 'No API configured for this build.'} Running the planner in your browser; this project is saved locally.`);
+    if (this.mode() !== 'api') this.log(this.apiConfigured ? 'warn' : 'info', `${this.apiConfigured ? 'API unreachable.' : 'No API configured for this build.'} Running the planner in your browser; this project is saved locally.`);
     this.genStatus.set('queued');
     this.offline = new OfflineRunner(
       text,
