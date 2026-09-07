@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signal } from '@angular/core';
 import type { MadNode, NodeId, NodeType } from '@mad/schema';
 import { isContainer, findParent } from '@mad/schema';
 import { Icon, type IconName } from '../../core/ui/icon.component';
@@ -69,10 +69,10 @@ export const TYPE_ICON: Record<NodeType, IconName> = {
           [attr.aria-level]="r.depth + 1"
           [attr.aria-selected]="store.selectedId() === r.node.id"
           [attr.aria-expanded]="r.hasChildren ? r.expanded : null"
-          tabindex="0"
+          [attr.tabindex]="tabbableId() === r.node.id ? 0 : -1"
           draggable="true"
           (click)="store.select(r.node.id)"
-          (keydown.enter)="store.select(r.node.id)"
+          (keydown)="onKeydown($event, $index)"
           (dblclick)="toggle(r.node.id)"
           (dragstart)="onDragStart($event, r.node)"
           (dragover)="onDragOver($event, r)"
@@ -115,6 +115,7 @@ export const TYPE_ICON: Record<NodeType, IconName> = {
 })
 export class LayerTree {
   protected readonly store = inject(StudioStore);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly collapsed = signal<ReadonlySet<NodeId>>(new Set());
   protected readonly drop = signal<{ id: NodeId; pos: 'before' | 'after' | 'inside' } | null>(null);
 
@@ -131,6 +132,84 @@ export class LayerTree {
     walk(root, 0);
     return out;
   });
+
+  /**
+   * The tree is one tab stop, not one per node: the selected row holds it, and
+   * the first row stands in whenever the selection is absent or collapsed away.
+   */
+  protected readonly tabbableId = computed<NodeId | null>(() => {
+    const rows = this.rows();
+    const selected = this.store.selectedId();
+    if (selected && rows.some((r) => r.node.id === selected)) return selected;
+    return rows[0]?.node.id ?? null;
+  });
+
+  /**
+   * The standard tree keyboard model, walked over the flattened rows: the arrows
+   * and Home/End carry focus and selection together, and left/right also close
+   * and open branches. Handled keys stop here, since the studio binds the same
+   * arrows on the window to move the canvas selection.
+   */
+  protected onKeydown(event: KeyboardEvent, index: number): void {
+    const rows = this.rows();
+    const row = rows[index];
+    if (!row || event.altKey || event.ctrlKey || event.metaKey) return;
+    switch (event.key) {
+      case 'ArrowDown':
+        this.focusRow(index + 1);
+        break;
+      case 'ArrowUp':
+        this.focusRow(index - 1);
+        break;
+      case 'Home':
+        this.focusRow(0);
+        break;
+      case 'End':
+        this.focusRow(rows.length - 1);
+        break;
+      case 'ArrowRight':
+        if (!row.hasChildren) return;
+        if (row.expanded) this.focusRow(index + 1);
+        else this.toggleAndSelect(row.node.id);
+        break;
+      case 'ArrowLeft':
+        if (row.hasChildren && row.expanded) this.toggleAndSelect(row.node.id);
+        else this.focusRow(this.parentIndex(index));
+        break;
+      case 'Enter':
+        this.store.select(row.node.id);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  /** Toggles a branch from the keyboard, keeping the selection on the row that stays focused. */
+  private toggleAndSelect(id: NodeId): void {
+    this.toggle(id);
+    this.store.select(id);
+  }
+
+  /** The nearest row above `index` that sits a level shallower, or -1 at the root. */
+  private parentIndex(index: number): number {
+    const rows = this.rows();
+    const depth = rows[index]?.depth ?? 0;
+    for (let i = index - 1; i >= 0; i--) {
+      const above = rows[i];
+      if (above && above.depth < depth) return i;
+    }
+    return -1;
+  }
+
+  /** Selecting alone would leave the caret behind, so the row element takes focus as well. */
+  private focusRow(index: number): void {
+    const target = this.rows()[index];
+    if (!target) return;
+    this.store.select(target.node.id);
+    this.host.nativeElement.querySelectorAll<HTMLElement>('[role=treeitem]')[index]?.focus();
+  }
 
   protected icon(type: NodeType): IconName {
     return TYPE_ICON[type];

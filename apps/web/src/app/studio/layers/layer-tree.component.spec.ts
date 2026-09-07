@@ -40,6 +40,9 @@ describe('LayerTree', () => {
   const rows = (fixture: { nativeElement: HTMLElement }) => [...fixture.nativeElement.querySelectorAll('[role=treeitem]')] as HTMLElement[];
   const row = (fixture: { nativeElement: HTMLElement }, name: string) => rows(fixture).find((r) => r.textContent?.includes(name))!;
   const buttonIn = (parent: HTMLElement, label: string) => parent.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement;
+  const names = (fixture: { nativeElement: HTMLElement }) => rows(fixture).map((r) => r.textContent?.trim());
+  const tabStops = (fixture: { nativeElement: HTMLElement }) => rows(fixture).map((r) => r.getAttribute('tabindex'));
+  const press = (target: HTMLElement, key: string) => target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 
   /** jsdom implements neither DataTransfer nor layout, so both are supplied here. */
   const dragEventOnto = (target: HTMLElement, type: 'dragover' | 'drop', payload: string, fraction: number) => {
@@ -100,6 +103,141 @@ describe('LayerTree', () => {
       const fixture = render();
       row(fixture, 'Sidebar').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       expect(store().selectedId()).toBe('n_side0001');
+    });
+  });
+
+  /**
+   * A generated app is hundreds of nodes deep, so the panel has to behave like a
+   * tree and not like hundreds of tab stops: one way in, then the arrows.
+   */
+  describe('keyboard navigation', () => {
+    it('offers one way into the tree, and moves it to whatever is selected', () => {
+      const fixture = render();
+      expect(tabStops(fixture)).toEqual(['0', '-1', '-1', '-1']);
+
+      row(fixture, 'Header').click();
+      fixture.detectChanges();
+
+      expect(tabStops(fixture)).toEqual(['-1', '-1', '0', '-1']);
+    });
+
+    it('falls back to the first row when the selection is collapsed out of sight', () => {
+      const fixture = render();
+      row(fixture, 'Header').click();
+      buttonIn(row(fixture, 'Main content'), 'Collapse').click();
+      fixture.detectChanges();
+
+      expect(tabStops(fixture)).toEqual(['0', '-1']);
+    });
+
+    it('walks down and back up the visible rows, carrying focus with the selection', () => {
+      const fixture = render();
+      row(fixture, 'Page').focus();
+
+      press(row(fixture, 'Page'), 'ArrowDown');
+      fixture.detectChanges();
+
+      expect(document.activeElement).toBe(row(fixture, 'Main content'));
+      expect(store().selectedId()).toBe('n_main0001');
+      expect(tabStops(fixture)).toEqual(['-1', '0', '-1', '-1']);
+
+      press(row(fixture, 'Main content'), 'ArrowUp');
+      fixture.detectChanges();
+
+      expect(document.activeElement).toBe(row(fixture, 'Page'));
+      expect(store().selectedId()).toBe('n_root0001');
+    });
+
+    it('stops at the ends of the list instead of wrapping', () => {
+      const fixture = render();
+      row(fixture, 'Page').focus();
+
+      press(row(fixture, 'Page'), 'ArrowUp');
+      press(row(fixture, 'Sidebar'), 'ArrowDown');
+      fixture.detectChanges();
+
+      expect(document.activeElement).toBe(row(fixture, 'Page'));
+      expect(store().selectedId()).toBeNull();
+    });
+
+    it('jumps to the first and last visible row', () => {
+      const fixture = render();
+      row(fixture, 'Main content').focus();
+
+      press(row(fixture, 'Main content'), 'End');
+      fixture.detectChanges();
+
+      expect(document.activeElement).toBe(row(fixture, 'Sidebar'));
+
+      press(row(fixture, 'Sidebar'), 'Home');
+      fixture.detectChanges();
+
+      expect(document.activeElement).toBe(row(fixture, 'Page'));
+      expect(store().selectedId()).toBe('n_root0001');
+    });
+
+    it('opens a closed branch with ArrowRight, then steps into it', () => {
+      const fixture = render();
+      buttonIn(row(fixture, 'Main content'), 'Collapse').click();
+      fixture.detectChanges();
+      row(fixture, 'Main content').focus();
+
+      press(row(fixture, 'Main content'), 'ArrowRight');
+      fixture.detectChanges();
+
+      expect(names(fixture)).toEqual(['Page', 'Main content', 'Header', 'Sidebar']);
+      expect(document.activeElement).toBe(row(fixture, 'Main content'));
+
+      press(row(fixture, 'Main content'), 'ArrowRight');
+      fixture.detectChanges();
+
+      expect(document.activeElement).toBe(row(fixture, 'Header'));
+      expect(store().selectedId()).toBe('n_head0001');
+    });
+
+    it('closes an open branch with ArrowLeft, then steps out to the parent', () => {
+      const fixture = render();
+      row(fixture, 'Main content').focus();
+
+      press(row(fixture, 'Main content'), 'ArrowLeft');
+      fixture.detectChanges();
+
+      expect(names(fixture)).toEqual(['Page', 'Main content']);
+      expect(row(fixture, 'Main content').getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(row(fixture, 'Main content'));
+
+      press(row(fixture, 'Main content'), 'ArrowLeft');
+      fixture.detectChanges();
+
+      expect(document.activeElement).toBe(row(fixture, 'Page'));
+      expect(store().selectedId()).toBe('n_root0001');
+    });
+
+    it('steps out of a leaf to its parent, since a leaf has nothing to close', () => {
+      const fixture = render();
+      row(fixture, 'Header').focus();
+
+      press(row(fixture, 'Header'), 'ArrowLeft');
+      fixture.detectChanges();
+
+      expect(names(fixture)).toEqual(['Page', 'Main content', 'Header', 'Sidebar']);
+      expect(document.activeElement).toBe(row(fixture, 'Main content'));
+    });
+
+    it('keeps the arrows it handles away from the studio-wide shortcuts', () => {
+      const fixture = render();
+      const escaped: string[] = [];
+      const listener = (event: Event) => escaped.push((event as KeyboardEvent).key);
+      window.addEventListener('keydown', listener);
+      try {
+        row(fixture, 'Page').focus();
+        press(row(fixture, 'Page'), 'ArrowDown');
+        press(row(fixture, 'Main content'), 'x');
+      } finally {
+        window.removeEventListener('keydown', listener);
+      }
+
+      expect(escaped).toEqual(['x']);
     });
   });
 
