@@ -42,6 +42,13 @@ jobs:
       - name: Build (web production, api bundle)
         run: npm run build
 
+      # Generated apps are the product: every design system and theme has to stay readable.
+      - name: Install Chromium for the contrast gate
+        run: npx playwright install --with-deps chromium
+
+      - name: Contrast gate (every design system, theme and viewport)
+        run: npm run check:contrast
+
       # Rasterised output depends on the runner's installed fonts, so this proves the
       # pipeline runs rather than diffing pixels against the committed assets.
       - name: Media pipeline runs

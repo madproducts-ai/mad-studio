@@ -111,7 +111,7 @@ export const compose = (blueprint: Blueprint, ctx: BuildContext, pace: number, o
     ...blueprint.features.map((f) => ({ id: f.id, label: f.label, detail: f.detail, status: 'pending' as const })),
     { id: 'schema', label: 'Model the database', detail: `${blueprint.tables.length} tables · PostgreSQL`, status: 'pending' },
     { id: 'wire', label: 'Wire integrations', detail: blueprint.integrations.map((i) => i.label).join(', ') || 'No third-party services needed', status: 'pending' },
-    { id: 'polish', label: 'Polish and verify', detail: 'Responsive pass, contrast, keyboard order', status: 'pending' },
+    { id: 'polish', label: 'Polish and verify', detail: 'Responsive pass and contrast check', status: 'pending' },
   ];
 
   const events: TimedEvent[] = [];
@@ -176,8 +176,8 @@ export const compose = (blueprint: Blueprint, ctx: BuildContext, pace: number, o
   push(140, { type: 'step', stepId: 'wire', status: 'done' });
 
   push(60, { type: 'step', stepId: 'polish', status: 'active' });
-  push(360, { type: 'log', level: 'info', message: 'Contrast check passed: all text ≥ 7:1 on generated surfaces' });
-  push(240, { type: 'log', level: 'info', message: 'Keyboard order verified for 3 breakpoints' });
+  push(360, { type: 'log', level: 'info', message: 'Contrast check passed: generated text clears WCAG AA (4.5:1) in this design system' });
+  push(240, { type: 'log', level: 'info', message: 'Responsive pass: the layout re-flows for tablet and phone widths' });
   push(200, { type: 'step', stepId: 'polish', status: 'done' });
 
   const nodeCount = countNodes(workingRoot);

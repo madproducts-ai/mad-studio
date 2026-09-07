@@ -20,7 +20,8 @@
     "db:migrate": "npm run db:migrate --workspace apps/api",
     "db:seed": "npm run db:seed --workspace apps/api",
     "media:build": "node media/build-media.mjs",
-    "sync:export-css": "node scripts/sync-export-css.mjs"
+    "sync:export-css": "node scripts/sync-export-css.mjs",
+    "check:contrast": "tsx scripts/check-contrast.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -28,6 +29,7 @@
   "devDependencies": {
     "playwright": "^1.63.0",
     "png-to-ico": "^3.0.2",
-    "sharp": "^0.35.4"
+    "sharp": "^0.35.4",
+    "tsx": "^4.20.0"
   }
 }

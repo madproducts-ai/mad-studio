@@ -123,6 +123,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy\deploy-iis.ps1
 Switches: `-SkipBuild`, `-SkipInstall`, `-SkipMigrate`. `deploy\test-mad-deploy.ps1` runs the module self-tests.
 **API.** `npm run build:api` produces a single `apps/api/dist/main.js`; run it with `DATABASE_URL`
 set on any Node 22+ host with PostgreSQL reachable.
+## Accessibility
+
+`npm run check:contrast` renders a generated application through the static exporter in every design system and theme, at desktop and phone widths, and measures each piece of text against the background it actually sits on. Anything below WCAG AA fails the command, and CI runs it on every push. The exporter's stylesheet is generated from the studio's canvas CSS, so the gate covers the editor as well as deployed pages.
+
 ## Environment
 
 See `apps/api/.env.example`. The API reads `apps/api/.env` (real environment variables win). `PORT` defaults to `4100`, `GENERATION_PACE` scales stream timing (`0` = instant, for tests). In development any loopback origin passes CORS. Auth: `SESSION_TTL_DAYS`, `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`. Planner: `ANTHROPIC_API_KEY`, `PLANNER_MODEL`, `PLANNER_EFFORT`, `PLANNER_TIMEOUT_MS`. Deploy: `DEPLOY_EXPORT_ROOT`, `DEPLOY_PUBLIC_BASE`. On the fleet these come from the untracked `deploy/.env.deploy` (see `deploy/.env.deploy.example`) and land in the API's `web.config`.
