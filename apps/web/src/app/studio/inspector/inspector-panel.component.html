@@ -210,8 +210,8 @@
       </div>
       <div class="control">
         <div class="flex items-center justify-between">
-          <span class="control-label">Border</span>
-          <button type="button" role="switch" class="switch" [attr.aria-checked]="style().border === true" [class.is-on]="style().border === true" (click)="setStyle({ border: !(style().border === true) })"><span class="knob"></span></button>
+          <label class="control-label" [for]="'style-border-' + n.id">Border</label>
+          <button type="button" role="switch" class="switch" [id]="'style-border-' + n.id" [attr.aria-checked]="style().border === true" [class.is-on]="style().border === true" (click)="setStyle({ border: !(style().border === true) })"><span class="knob"></span></button>
         </div>
       </div>
       <div class="control">
@@ -224,8 +224,8 @@
       </div>
       <div class="control">
         <div class="flex items-center justify-between">
-          <span class="control-label">Hidden</span>
-          <button type="button" role="switch" class="switch" [attr.aria-checked]="style().hidden === true" [class.is-on]="style().hidden === true" (click)="store.toggleHidden(n.id)"><span class="knob"></span></button>
+          <label class="control-label" [for]="'style-hidden-' + n.id">Hidden</label>
+          <button type="button" role="switch" class="switch" [id]="'style-hidden-' + n.id" [attr.aria-checked]="style().hidden === true" [class.is-on]="style().hidden === true" (click)="store.toggleHidden(n.id)"><span class="knob"></span></button>
         </div>
       </div>
     </section>
