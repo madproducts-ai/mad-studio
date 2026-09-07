@@ -48,6 +48,7 @@ Rules:
 - integrations: only slugs from this catalog, and only those the brief needs or strongly implies (payments → stripe unless another vendor is named; chat → mad-chat; auth → supabase-auth unless another vendor is named; always include postgres):
 ${CATALOG_LINES}
 - intents: the feature areas the brief covers, from the allowed list.
+- sampleTerms: 6 to 10 short work items someone in this domain would really see on a board or in a feed, written as they would be written in the product ("Permit resubmitted for 14 Oak St", "Barrel 47 racked and topped"). This is the sample content the interface is populated with, so generic software-team tasks would give the game away.
 - archetype: internal-tool for back-office and admin tools, saas for multi-tenant products, marketplace for two-sided platforms, marketing-site for landing pages and websites, mobile-app for phone-first apps.
 - navLinks, sidebarItems and primaryAction should read like a real product, not like the brief.
 - Never include prose, explanations or markdown. Return only the specification.`;

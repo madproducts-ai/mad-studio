@@ -283,11 +283,20 @@ const renderInner = (n: MadNode): string => {
       const r = rng(seed);
       const cols = list(p['columns']).length ? list(p['columns']) : ['Todo', 'Doing', 'Done'];
       const per = Math.min(8, Math.max(1, num(p['cardsPerColumn'], 3)));
+      // A planned app supplies its own vocabulary; anything else falls back to the generic set.
+      const planned = list(p['cards']);
+      let next = 0;
       return el(
         'div',
         { class: 'r-kanban' },
         cols.map((title, ci) => {
-          const cards = Array.from({ length: Math.max(1, per - (ci % 2)) }, () => taskCard(r));
+          const cards = Array.from({ length: Math.max(1, per - (ci % 2)) }, () => {
+            const generated = taskCard(r);
+            if (planned.length === 0) return generated;
+            const label = planned[next % planned.length] as string;
+            next += 1;
+            return { ...generated, title: label };
+          });
           return el('div', { class: 'r-kanban-col' }, [
             el('span', { class: 'r-kanban-head' }, `${esc(title)}<span class="r-kanban-count">${cards.length}</span>`),
             ...cards.map((c) =>

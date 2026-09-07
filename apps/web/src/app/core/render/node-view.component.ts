@@ -118,9 +118,18 @@ export class NodeView {
     const r = rng(this.seed());
     const cols = list(this.p()['columns']);
     const per = Math.min(8, Math.max(1, num(this.p()['cardsPerColumn'], 3)));
+    // A planned app supplies its own vocabulary; anything else falls back to the generic set.
+    const planned = list(this.p()['cards']);
+    let next = 0;
     return (cols.length ? cols : ['Todo', 'Doing', 'Done']).map((title, ci) => ({
       title,
-      cards: Array.from({ length: Math.max(1, per - (ci % 2)) }, () => taskCard(r)),
+      cards: Array.from({ length: Math.max(1, per - (ci % 2)) }, () => {
+        const generated = taskCard(r);
+        if (planned.length === 0) return generated;
+        const label = planned[next % planned.length] as string;
+        next += 1;
+        return { ...generated, title: label };
+      }),
     }));
   });
 

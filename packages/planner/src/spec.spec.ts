@@ -24,6 +24,7 @@ const SPEC: AppSpec = {
   ],
   integrations: ['stripe', 'postgres', 'not-a-real-vendor', 'stripe'],
   intents: ['dashboard', 'inventory', 'billing', 'dashboard'],
+  sampleTerms: ['Pallet 22 short-shipped', 'Reorder point hit for SKU 4471', 'Pallet 22 short-shipped'],
 };
 
 describe('AppSpec', () => {
@@ -40,6 +41,7 @@ describe('AppSpec', () => {
     expect(clean.navLinks).toEqual(['Search', 'Docs', 'Changelog']);
     expect(clean.tables.map((t) => t.table)).toEqual(['orders', 'suppliers']);
     expect(clean.integrations).toEqual(['stripe', 'postgres']);
+    expect(clean.sampleTerms).toEqual(['Pallet 22 short-shipped', 'Reorder point hit for SKU 4471']);
     expect(clean.intents).toEqual(['dashboard', 'inventory', 'billing']);
   });
 });
@@ -69,6 +71,9 @@ describe('planFromSpec', () => {
     expect(content?.children.map((c) => c.type)).toEqual(['section', 'section', 'section', 'section', 'section']);
     expect(content?.children[1]?.children.some((c) => c.type === 'table')).toBe(true);
     expect(content?.children[2]?.children.some((c) => c.type === 'kanban')).toBe(true);
+    // The board is populated with the domain's own vocabulary, not the renderer's generic sample tasks.
+    const board = content?.children[2]?.children.find((c) => c.type === 'kanban');
+    expect(board?.props['cards']).toEqual(['Pallet 22 short-shipped', 'Reorder point hit for SKU 4471']);
   });
 
   it('renders every section kind without throwing', () => {

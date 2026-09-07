@@ -27,6 +27,7 @@ const SPEC: AppSpec = {
   tables: [{ table: 'stock_items', columns: ['id', 'sku', 'location', 'on_hand', 'created_at'] }],
   integrations: ['postgres'],
   intents: ['dashboard', 'inventory'],
+  sampleTerms: ['Pallet 22 short-shipped', 'Cycle count due in aisle 4'],
 };
 
 interface Recorded {

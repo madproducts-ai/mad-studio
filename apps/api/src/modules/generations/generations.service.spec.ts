@@ -27,6 +27,7 @@ const SPEC: AppSpec = {
   tables: [{ table: 'deals', columns: ['id', 'name', 'stage', 'amount_cents'] }],
   integrations: ['stripe', 'mad-chat', 'postgres'],
   intents: ['crm', 'billing', 'support-chat'],
+  sampleTerms: ['Renewal call with Acme', 'Invoice 1042 disputed'],
 };
 
 const fakeClient = (behaviour: 'spec' | 'fail' | 'empty'): PlannerClient => ({

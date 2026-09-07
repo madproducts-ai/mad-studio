@@ -80,8 +80,8 @@ export const list = (ctx: BuildContext, name: string, items: string[], ordered =
 export const tabs = (ctx: BuildContext, name: string, labels: string[], children: MadNode[], active = 0) =>
   node(ctx, 'tabs', name, { tabs: labels, active }, { gap: 16 }, children);
 
-export const kanban = (ctx: BuildContext, name: string, columns: string[], cardsPerColumn = 3) =>
-  node(ctx, 'kanban', name, { columns, cardsPerColumn });
+export const kanban = (ctx: BuildContext, name: string, columns: string[], cardsPerColumn = 3, cards: string[] = []) =>
+  node(ctx, 'kanban', name, { columns, cardsPerColumn, ...(cards.length ? { cards } : {}) });
 
 export const chat = (ctx: BuildContext, title: string, agentName: string) =>
   node(ctx, 'chat', title, { title, agentName, placeholder: 'Type a reply…', showStatus: true });

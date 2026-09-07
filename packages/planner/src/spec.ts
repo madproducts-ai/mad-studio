@@ -99,6 +99,12 @@ export const AppSpecSchema = z
     integrations: z.array(z.string().min(1).max(40)).max(8),
     /** The feature intents the brief implies; drives plan-step labels. */
     intents: z.array(z.enum(INTENTS)).max(6),
+    /**
+     * Short, concrete work items someone in this domain would actually see on a
+     * board: the sample data that makes a generated app feel like the real thing
+     * rather than a template. Empty is allowed; the renderer then uses its own.
+     */
+    sampleTerms: z.array(z.string().min(1).max(70)).max(12),
   })
   .strict();
 export type AppSpec = z.infer<typeof AppSpecSchema>;
@@ -124,6 +130,7 @@ export const sanitizeSpec = (spec: AppSpec): AppSpec => {
     sections,
     tables,
     integrations: dedupe(spec.integrations).filter((slug) => KNOWN_INTEGRATION_SLUGS.includes(slug)),
+    sampleTerms: dedupe(spec.sampleTerms),
     intents: Array.from(new Set(spec.intents)) as Intent[],
   };
 };
@@ -206,7 +213,7 @@ export const buildSection = (ctx: BuildContext, spec: AppSpec, s: AppSpecSection
       children.push(table(ctx, s.title, items.slice(0, 7), 8));
       break;
     case 'kanban':
-      children.push(kanban(ctx, s.title, items.slice(0, 6), 3));
+      children.push(kanban(ctx, s.title, items.slice(0, 6), 3, spec.sampleTerms));
       break;
     case 'chat':
       children.push(chat(ctx, s.title, items[0] ?? 'Assistant'));
