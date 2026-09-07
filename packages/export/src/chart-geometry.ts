@@ -48,16 +48,29 @@ export const chartLayers = (seed: string, labels: readonly string[], points: num
   });
 };
 
-export const chartBars = (seed: string, points: number): ChartBar[] => {
+/**
+ * Grouped bars, one group per period and one bar per series, so the legend and
+ * the drawing agree. The total bar count is capped rather than the period count
+ * alone: four series over twelve periods would otherwise be slivers. A mild
+ * upward bias keeps the bars varied without collapsing them onto the floor.
+ */
+export const chartBars = (seed: string, points: number, seriesCount = 1): ChartBar[] => {
   const r = rng(hashSeed(seed));
-  const n = Math.max(2, Math.min(points, 16));
-  const values = series(r, n, -0.7);
-  const gap = 6;
-  const w = (CHART_W - gap * (n - 1)) / n;
-  return values.map((v, i) => {
-    const h = v * (CHART_H - 6);
-    return { x: i * (w + gap), y: CHART_H - h, w, h, color: i === 0 ? 'var(--r-accent)' : 'var(--r-bar)' };
-  });
+  const groups = Math.max(3, Math.min(points, Math.floor(24 / Math.max(1, seriesCount)), 16));
+  const count = Math.max(1, Math.min(seriesCount, 4));
+  const groupGap = 8;
+  const barGap = count > 1 ? 2 : 0;
+  const groupWidth = (CHART_W - groupGap * (groups - 1)) / groups;
+  const w = (groupWidth - barGap * (count - 1)) / count;
+  const bars: ChartBar[] = [];
+  for (let s = 0; s < count; s += 1) {
+    const values = series(r, groups, 0.12);
+    for (let i = 0; i < groups; i += 1) {
+      const h = (values[i] ?? 0.5) * (CHART_H - 6);
+      bars.push({ x: i * (groupWidth + groupGap) + s * (w + barGap), y: CHART_H - h, w, h, color: CHART_PALETTE[s % CHART_PALETTE.length] as string });
+    }
+  }
+  return bars;
 };
 
 export const chartDonut = (seed: string, labels: readonly string[]): DonutSegment[] => {

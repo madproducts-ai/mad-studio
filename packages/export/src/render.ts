@@ -78,7 +78,7 @@ const renderChart = (node: MadNode): string => {
   const grid = [0.25, 0.5, 0.75].map((y) => `<line x1="0" y1="${CHART_H * y}" x2="${CHART_W}" y2="${CHART_H * y}" stroke="var(--r-line)" stroke-dasharray="2 4"/>`).join('');
   let body: string;
   if (kind === 'bar') {
-    body = chartBars(node.id, points)
+    body = chartBars(node.id, points, labels.length)
       .map((b, i) => `<rect x="${b.x.toFixed(2)}" y="${b.y.toFixed(2)}" width="${b.w.toFixed(2)}" height="${b.h.toFixed(2)}" fill="${esc(b.color)}" rx="2" class="bar" style="--i:${i}"/>`)
       .join('');
   } else {

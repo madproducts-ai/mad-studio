@@ -80,6 +80,6 @@ export class Chart {
   protected readonly uid = Math.random().toString(36).slice(2, 7);
 
   protected readonly layers = computed(() => chartLayers(this.seed(), this.labels(), this.points()));
-  protected readonly bars = computed(() => chartBars(this.seed(), this.points()));
+  protected readonly bars = computed(() => chartBars(this.seed(), this.points(), this.labels().length));
   protected readonly donut = computed(() => chartDonut(this.seed(), this.labels()));
 }
