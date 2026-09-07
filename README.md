@@ -135,6 +135,16 @@ The static exporter's stylesheet is generated from the canvas CSS by `npm run sy
 
 Layout breakpoints in the editor: below 640px the secondary actions fold away, below 1024px the preview controls hide and the left panel floats over the canvas instead of taking width from it. Verified at 375, 768, 1440 and 812x375 landscape.
 
+## Testing
+
+`npm test` runs Vitest across every workspace: the planner and the static exporter as plain unit tests, the API against a real request pipeline, and the web app through Angular's unit-test builder on jsdom.
+
+Studio component tests wire up the real store, auth service, theme and toast services and replace only the network boundary, so a test exercises the same state machine the application runs. The shared harness is `apps/web/src/app/testing/studio-harness.ts`; every fake API call rejects as unreachable unless a test overrides it, so nothing reaches the network by accident. That folder is scoped to `tsconfig.spec.json`, so test-only code never enters the application program.
+
+They cover behaviour a person would notice, not implementation: that the save badge distinguishes a saved cloud version from a local one and reports a conflict instead of a quiet success, that submitting a prompt does not enter the build state until connectivity and the session have settled, that the deploy panel is a labelled disclosure rather than an ARIA menu with no items, that edits coalesce into one undo step per gesture, and that dropping a layer onto a container reparents it.
+
+One test is a sweep rather than an assertion: the inspector renders both tabs for every node type and every control must have an accessible name, computed the way a screen reader would. The Border and Hidden switches once shipped labelled by a plain `span`, which names nothing. A per-control assertion would not have caught that, because nobody writes an assertion for the control they forgot.
+
 ## Accessibility
 
 `npm run check:contrast` measures each piece of text against the background it actually sits on and fails on anything below WCAG AA. It covers two surfaces: a generated application rendered through the static exporter in every design system and theme at desktop and phone widths, and the studio's own interface (landing and editor) in both themes, served from `apps/web/dist`. Sixteen renderings in total. CI runs it on every push, after the build.
