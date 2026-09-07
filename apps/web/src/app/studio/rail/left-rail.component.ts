@@ -11,7 +11,7 @@ import { HistoryPanel } from '../history/history-panel.component';
   selector: 'mad-left-rail',
   imports: [Icon, ComponentPalette, LayerTree, IntegrationsPanel, SchemaPanel, HistoryPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'flex min-h-0 overflow-hidden border-r border-line bg-panel' },
+  host: { class: 'relative flex min-h-0 overflow-visible border-r border-line bg-panel' },
   template: `
     <nav class="flex w-12 flex-col items-center gap-1 border-r border-line py-2" aria-label="Studio panels">
       @for (item of items; track item.id) {
@@ -58,6 +58,11 @@ import { HistoryPanel } from '../history/history-panel.component';
     .rail-btn.is-active { background: var(--mad-raised); color: var(--mad-ember); box-shadow: inset 0 0 0 1px var(--mad-line-strong); }
     .badge { position: absolute; top: 3px; right: 3px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--mad-signal); color: var(--mad-signal-ink); font-family: var(--font-mono); font-size: 0.58rem; line-height: 14px; text-align: center; font-weight: 600; }
     .panel-body { animation: panel-in 0.3s var(--ease-out-expo) both; }
+    /* Below the desktop breakpoint the panel overlays the canvas rather than
+       competing with it for width. */
+    @media (max-width: 1023px) {
+      .panel-body { position: absolute; left: 3rem; top: 0; bottom: 0; z-index: 30; width: min(272px, calc(100vw - 3rem)); border-right: 1px solid var(--mad-line); background: var(--mad-panel); box-shadow: var(--shadow-float, 0 24px 60px -24px rgb(0 0 0 / 0.6)); }
+    }
     @keyframes panel-in { from { opacity: 0; transform: translateX(-6px); } }
   `,
 })

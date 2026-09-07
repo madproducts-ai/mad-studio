@@ -21,6 +21,8 @@ import { AuthService } from '../core/auth/auth.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'studio fixed inset-0 grid bg-bg text-ink', '[class.has-inspector]': 'store.inspectorOpen() && store.selectedNode() !== null', '[class.has-panel]': 'store.leftPanel() !== null' },
   template: `
+    <!-- The editor is a single view with no visible page title; assistive technology still needs one. -->
+    <h1 class="sr-only">MAD Studio: {{ store.projectName() }}</h1>
     <mad-studio-topbar class="[grid-area:top]" />
     <mad-left-rail class="[grid-area:rail]" />
     <mad-studio-canvas class="[grid-area:canvas]" />

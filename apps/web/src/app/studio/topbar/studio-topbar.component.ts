@@ -17,9 +17,9 @@ import { StudioStore } from '../state/studio.store';
       <img src="brand/logo-mark.svg" width="22" height="22" alt="" class="size-[22px] rounded-md" />
     </a>
     <span class="text-line-strong" aria-hidden="true">/</span>
-    <div class="flex min-w-0 items-center gap-2">
+    <div class="flex min-w-0 shrink items-center gap-2 overflow-hidden">
       <input
-        class="project-name min-w-[6ch] max-w-[26ch] rounded-md bg-transparent px-1.5 py-1 text-step--1 font-semibold text-ink outline-none hover:bg-hover focus:bg-raised focus:ring-1 focus:ring-signal"
+        class="project-name min-w-[6ch] max-w-[12ch] sm:max-w-[26ch] rounded-md bg-transparent px-1.5 py-1 text-step--1 font-semibold text-ink outline-none hover:bg-hover focus:bg-raised focus:ring-1 focus:ring-signal"
         [value]="store.projectName()"
         [style.width.ch]="Math.min(26, Math.max(6, store.projectName().length + 1))"
         aria-label="Project name"
@@ -33,18 +33,18 @@ import { StudioStore } from '../state/studio.store';
       </span>
       @if (store.mode() === 'offline') {
         @if (store.apiConfigured) {
-          <span class="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[0.68rem] font-medium text-warning" title="The API is unreachable. Builds run in your browser and save locally.">
+          <span class="hidden items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[0.68rem] font-medium text-warning sm:inline-flex" title="The API is unreachable. Builds run in your browser and save locally.">
             <mad-icon name="cloud-off" [size]="11" /> Offline
           </span>
         } @else {
-          <span class="inline-flex items-center gap-1 rounded-full border border-signal/40 bg-signal/10 px-2 py-0.5 text-[0.68rem] font-medium text-signal" title="This build has no API attached. Builds run in your browser and projects save locally.">
+          <span class="hidden items-center gap-1 rounded-full border border-signal/40 bg-signal/10 px-2 py-0.5 text-[0.68rem] font-medium text-signal sm:inline-flex" title="This build has no API attached. Builds run in your browser and projects save locally.">
             <mad-icon name="cpu" [size]="11" /> Browser mode
           </span>
         }
       }
     </div>
 
-    <div class="mx-auto flex items-center gap-1">
+    <div class="mx-auto hidden items-center gap-1 lg:flex">
       <div role="group" aria-label="Device" class="flex items-center gap-0.5 rounded-lg border border-line bg-bg p-0.5">
         @for (d of devices; track d.id) {
           <button type="button" class="seg" [class.is-active]="store.device() === d.id" [attr.aria-pressed]="store.device() === d.id" [attr.aria-label]="d.label" [title]="d.label + ' (' + d.key + ')'" (click)="store.device.set(d.id)">
@@ -75,11 +75,11 @@ import { StudioStore } from '../state/studio.store';
     </div>
 
     <div class="flex items-center gap-1">
-      <button type="button" class="btn btn-ghost btn-icon" [disabled]="!store.canUndo()" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" (click)="store.undo()"><mad-icon name="undo" [size]="15" /></button>
-      <button type="button" class="btn btn-ghost btn-icon" [disabled]="!store.canRedo()" aria-label="Redo (Ctrl+Shift+Z)" title="Redo (Ctrl+Shift+Z)" (click)="store.redo()"><mad-icon name="redo" [size]="15" /></button>
-      <span class="mx-1 h-5 w-px bg-line"></span>
+      <button type="button" class="btn btn-ghost btn-icon hidden sm:inline-flex" [disabled]="!store.canUndo()" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" (click)="store.undo()"><mad-icon name="undo" [size]="15" /></button>
+      <button type="button" class="btn btn-ghost btn-icon hidden sm:inline-flex" [disabled]="!store.canRedo()" aria-label="Redo (Ctrl+Shift+Z)" title="Redo (Ctrl+Shift+Z)" (click)="store.redo()"><mad-icon name="redo" [size]="15" /></button>
+      <span class="mx-1 hidden h-5 w-px bg-line sm:block"></span>
       <button type="button" class="btn btn-ghost btn-icon" aria-label="Toggle studio theme" (click)="theme.toggle()"><mad-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="15" /></button>
-      <button type="button" class="btn btn-ghost btn-sm gap-1.5" (click)="share()" [disabled]="!store.projectId()"><mad-icon name="copy" [size]="14" /> Share</button>
+      <button type="button" class="btn btn-ghost btn-sm gap-1.5 hidden sm:inline-flex" (click)="share()" [disabled]="!store.projectId()"><mad-icon name="copy" [size]="14" /> Share</button>
       <div class="relative">
         <button #deployTrigger type="button" class="btn btn-primary btn-sm gap-1.5" [disabled]="!store.root() || store.deploying() || store.generating()" (click)="deployOpen.set(!deployOpen())" [attr.aria-expanded]="deployOpen()" aria-controls="deploy-menu">
           @if (store.deploying()) {

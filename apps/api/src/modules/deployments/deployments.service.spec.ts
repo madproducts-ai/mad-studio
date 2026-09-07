@@ -55,6 +55,16 @@ const deploy = async (service: DeploymentsService, project: Project, target: Dep
 
 const pageOf = (publisher: SitePublisher, project: Project, deployment: Deployment): string => join(root, publisher.relativePath(project, deployment), 'index.html');
 
+/** Retention is applied after the new snapshot is already live; wait for it to settle. */
+const settleRetention = async (repo: MemoryRepository, projectId: string, expectedLivePreviews: number): Promise<void> => {
+  for (let i = 0; i < 200; i += 1) {
+    const live = (await repo.deployments.listForProject(projectId, 100)).filter((d) => d.target === 'preview' && d.status === 'live');
+    if (live.length === expectedLivePreviews) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error('preview retention never settled');
+};
+
 describe('DeploymentsService', () => {
   it('publishes a page, a manifest and the document, and refuses an empty project', async () => {
     const { repo, service, publisher, project } = await boot();
@@ -89,6 +99,7 @@ describe('DeploymentsService', () => {
     const { repo, service, publisher, project } = await boot();
     const previews: Deployment[] = [];
     for (let i = 0; i < 7; i += 1) previews.push(await deploy(service, project, 'preview'));
+    await settleRetention(repo, project.id, 5);
 
     const kept = previews.slice(-5);
     const retired = previews.slice(0, -5);

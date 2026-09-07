@@ -105,7 +105,8 @@ export class StudioStore {
   // ---------- view ----------
   readonly device = signal<Device>('desktop');
   readonly zoom = signal<number | 'fit'>('fit');
-  readonly leftPanel = signal<LeftPanel | null>('components');
+  /** The palette opens by default only where it fits beside the canvas. */
+  readonly leftPanel = signal<LeftPanel | null>(typeof window === 'undefined' || window.innerWidth >= 1024 ? 'components' : null);
   readonly inspectorOpen = signal(true);
   readonly consoleOpen = signal(false);
 
