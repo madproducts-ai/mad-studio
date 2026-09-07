@@ -92,7 +92,7 @@ With `ANTHROPIC_API_KEY` set, the API asks Claude (`PLANNER_MODEL`, default `cla
 
 ### Deployments
 
-Deploy renders the saved document version with `@mad/export` — a static HTML renderer generated from the studio canvas CSS (`npm run sync:export-css`) — and writes `index.html`, `manifest.json` and `document.json` to `DEPLOY_EXPORT_ROOT`. Production deploys own `<slug>-<id>/` and are replaced in place; previews are immutable snapshots under `<slug>-<id>/p/<deployment>/`. The five most recent previews of a project stay reachable â€” publishing a sixth removes the oldest snapshot from disk and marks that deployment withdrawn, so the host cannot fill up with old previews. Without `DEPLOY_PUBLIC_BASE` the API serves the export root itself at `/exports/`; on the fleet the FE site serves it under `https://studio.madproducts.ai/apps/`.
+Deploy renders the saved document version with `@mad/export` — a static HTML renderer generated from the studio canvas CSS (`npm run sync:export-css`) — and writes `index.html`, `manifest.json` and `document.json` to `DEPLOY_EXPORT_ROOT`. Production deploys own `<slug>-<id>/` and are replaced in place; previews are immutable snapshots under `<slug>-<id>/p/<deployment>/`. The five most recent previews of a project stay reachable — publishing a sixth removes the oldest snapshot from disk and marks that deployment withdrawn, so the host cannot fill up with old previews. Without `DEPLOY_PUBLIC_BASE` the API serves the export root itself at `/exports/`; on the fleet the FE site serves it under `https://studio.madproducts.ai/apps/`.
 
 ## Deploy
 
@@ -123,6 +123,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy\deploy-iis.ps1
 Switches: `-SkipBuild`, `-SkipInstall`, `-SkipMigrate`. `deploy\test-mad-deploy.ps1` runs the module self-tests.
 **API.** `npm run build:api` produces a single `apps/api/dist/main.js`; run it with `DATABASE_URL`
 set on any Node 22+ host with PostgreSQL reachable.
+## Design system
+
+Two token sets, deliberately separate, and mixing them is the easiest mistake to make here.
+
+**The studio chrome** uses `--mad-*`, defined in `apps/web/src/styles.css`. Dark is the product default; light is a full palette swap on `:root[data-theme="light"]`, not a filter, so every token is redefined and each theme is measured on its own. Surfaces run `--mad-bg` -> `--mad-panel` -> `--mad-raised` -> `--mad-hover`, text runs `--mad-ink` down to `--mad-ink-4`, and the accents are ember (primary), signal (focus and links), success, warning and danger. Type is Bricolage Grotesque for display, Instrument Sans for body and JetBrains Mono for code, on a fluid `--text-step--2` to `--text-step-5` scale. Radii are `--radius-sm` 6px through `--radius-xl` 20px. Motion uses `--ease-out-expo` for entrances and `--ease-spring` for anything that should feel physical.
+
+**Generated applications** use `--r-*`, defined on the device frame in `apps/web/src/app/core/render/device-frame.component.ts`. They are a separate palette per design system (Tailwind, Material, WordPress) and per theme, so a generated app never inherits the studio's look. Semantic roles are distinct from brand: `--r-warning` is not the accent, because the accent is amber in one skin and deep blue or purple in others.
+
+The static exporter's stylesheet is generated from the canvas CSS by `npm run sync:export-css`, so the two renderers cannot drift; the export tests fail when the checked-in output is stale. Changing any colour token means re-running `npm run check:contrast`, which measures both surfaces in both themes.
+
+Layout breakpoints in the editor: below 640px the secondary actions fold away, below 1024px the preview controls hide and the left panel floats over the canvas instead of taking width from it. Verified at 375, 768, 1440 and 812x375 landscape.
+
 ## Accessibility
 
 `npm run check:contrast` measures each piece of text against the background it actually sits on and fails on anything below WCAG AA. It covers two surfaces: a generated application rendered through the static exporter in every design system and theme at desktop and phone widths, and the studio's own interface (landing and editor) in both themes, served from `apps/web/dist`. Sixteen renderings in total. CI runs it on every push, after the build.
