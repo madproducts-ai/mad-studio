@@ -54,13 +54,13 @@ jobs:
       - name: Media pipeline runs
         run: npm run media:build
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: apps/web/dist/web/browser
           retention-days: 7
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: api-dist
           path: apps/api/dist
