@@ -60,6 +60,8 @@ describe('GenerationsService', () => {
     expect(project?.name).toBe('Pipeline Desk');
     expect(project?.description).toBe(SPEC.summary);
     expect(project?.status).toBe('ready');
+    // The deployment URL is built from the slug, so it has to follow the name the model chose.
+    expect(project?.slug).toBe('pipeline-desk');
     const doc = await repo.documents.latest(created.projectId);
     expect(doc?.document.root.name).toBe('Pipeline Desk');
     expect(doc?.document.integrations).toEqual(['stripe', 'mad-chat', 'postgres']);

@@ -101,7 +101,7 @@ export interface Repository {
     list(workspaceId: string, options: ListOptions): Promise<Page<Project>>;
     findById(id: string): Promise<Project | null>;
     create(input: NewProject): Promise<Project>;
-    update(id: string, patch: Partial<Pick<Project, 'name' | 'description' | 'status' | 'lastPrompt' | 'designSystem'>>): Promise<Project>;
+    update(id: string, patch: Partial<Pick<Project, 'name' | 'slug' | 'description' | 'status' | 'lastPrompt' | 'designSystem'>>): Promise<Project>;
     delete(id: string): Promise<void>;
     slugExists(workspaceId: string, slug: string): Promise<boolean>;
   };

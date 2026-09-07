@@ -226,7 +226,7 @@ export class GenerationsService implements OnModuleDestroy {
       const project = await this.repo.projects.findById(projectId);
       if (project) {
         await this.repo.documents.append(projectId, project.documentVersion, { ...outcome.document, updatedAt: new Date().toISOString() }, 'ai', id);
-        if (outcome.rename) await this.repo.projects.update(projectId, outcome.rename);
+        if (outcome.rename) await this.projects.adoptPlannedIdentity(projectId, outcome.rename.name, outcome.rename.description);
       }
       for (const event of closing) await emit(event);
       await this.flush(id, live);

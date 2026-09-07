@@ -28,14 +28,32 @@ export class ProjectsService {
   }
 
   async create(workspaceId: string, input: CreateProjectRequest): Promise<Project> {
-    const base = slugify(input.name);
+    const slug = await this.uniqueSlug(workspaceId, input.name);
+    return this.repo.projects.create({ workspaceId, name: input.name, slug, description: input.description ?? null, designSystem: input.designSystem });
+  }
+
+  private async uniqueSlug(workspaceId: string, name: string): Promise<string> {
+    const base = slugify(name);
     let slug = base;
     let n = 2;
     while (await this.repo.projects.slugExists(workspaceId, slug)) {
       slug = `${base}-${n}`;
       n += 1;
     }
-    return this.repo.projects.create({ workspaceId, name: input.name, slug, description: input.description ?? null, designSystem: input.designSystem });
+    return slug;
+  }
+
+  /**
+   * Adopts the name the planner chose for a project created moments earlier from
+   * a placeholder. The slug moves with the name, because it is what the public
+   * deployment URL is built from; leaving it behind would publish the app under
+   * a name nobody chose. Only ever called before the project has been deployed.
+   */
+  async adoptPlannedIdentity(projectId: string, name: string, description: string): Promise<Project | null> {
+    const project = await this.repo.projects.findById(projectId);
+    if (!project) return null;
+    const slug = await this.uniqueSlug(project.workspaceId, name);
+    return this.repo.projects.update(projectId, { name, description, slug });
   }
 
   async rename(workspaceId: string, id: string, name: string, description: string | null): Promise<Project> {
