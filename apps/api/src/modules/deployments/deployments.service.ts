@@ -6,6 +6,9 @@ import { REPOSITORY, type Repository } from '../../repositories/repository';
 import { ProjectsService } from '../projects/projects.service';
 import { SitePublisher } from './publisher';
 
+/** How many preview snapshots of a project stay reachable; older ones are withdrawn. */
+const PREVIEW_RETENTION = 5;
+
 /**
  * Deployment lifecycle: queued → building → live | failed. "Building" renders
  * the saved document version to a standalone static page and publishes it to
@@ -52,9 +55,31 @@ export class DeploymentsService {
       const result = await this.publisher.publish({ deployment, project, document: record.document, studioUrl });
       await this.repo.deployments.update(deployment.id, { status: 'live', url: result.url });
       if (deployment.target === 'production') await this.repo.projects.update(deployment.projectId, { status: 'deployed' });
+      else await this.prunePreviews(project, deployment.id);
     } catch (error) {
       this.logger.error(`Deployment ${deployment.id} failed: ${error instanceof Error ? error.message : String(error)}`);
       await this.repo.deployments.update(deployment.id, { status: 'failed' }).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Every preview is an immutable snapshot with its own URL, so without a bound
+   * they would accumulate on the fleet's disk forever. The newest few per project
+   * stay reachable; older ones have their files removed and are marked withdrawn,
+   * which is what a preview link that has aged out should say. Pruning never fails
+   * a deployment: the new snapshot is already live by this point.
+   */
+  private async prunePreviews(project: Project, keepId: string): Promise<void> {
+    try {
+      const previews = (await this.repo.deployments.listForProject(project.id, 100)).filter((d) => d.target === 'preview' && d.status === 'live' && d.id !== keepId);
+      const stale = previews.slice(PREVIEW_RETENTION - 1);
+      for (const d of stale) {
+        await this.publisher.remove(project, d);
+        await this.repo.deployments.update(d.id, { status: 'rolled-back', url: null });
+      }
+      if (stale.length > 0) this.logger.log(`Withdrew ${stale.length} superseded preview(s) of ${project.slug}, keeping the newest ${PREVIEW_RETENTION}`);
+    } catch (error) {
+      this.logger.warn(`Could not prune previews for project ${project.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

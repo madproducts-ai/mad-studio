@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { DesignSystem, Device } from '@mad/schema';
+import type { Deployment, DesignSystem, Device } from '@mad/schema';
 import { Icon, type IconName } from '../../core/ui/icon.component';
 import { ThemeService } from '../../core/theme/theme.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -100,11 +100,20 @@ import { StudioStore } from '../state/studio.store';
             </button>
             @if (store.deployments().length) {
               <div class="my-1 h-px bg-line"></div>
-              @for (d of store.deployments().slice(0, 3); track d.id) {
-                <a class="menu-item" [href]="d.url || '#'" target="_blank" rel="noreferrer">
-                  <i class="size-1.5 rounded-full" [class.bg-success]="d.status === 'live'" [class.bg-warning]="d.status === 'building' || d.status === 'queued'" [class.bg-danger]="d.status === 'failed'"></i>
-                  <span><b class="capitalize">{{ d.target }} · v{{ d.documentVersion }}</b><small class="mono">{{ d.url ? d.url.replace('https://', '') : d.status }}</small></span>
-                </a>
+              <!-- Enough rows to cover every retained preview, so a withdrawn one is visible rather than just 404ing. -->
+              @for (d of store.deployments().slice(0, 6); track d.id) {
+                @if (d.url) {
+                  <a class="menu-item" [href]="d.url" target="_blank" rel="noreferrer">
+                    <i class="dot" [class.bg-success]="d.status === 'live'" [class.bg-warning]="d.status === 'building' || d.status === 'queued'"></i>
+                    <span><b class="capitalize">{{ d.target }} · v{{ d.documentVersion }}</b><small class="mono">{{ d.url.replace('https://', '') }}</small></span>
+                  </a>
+                } @else {
+                  <!-- No URL: still building, failed, or a preview that has aged out. Not a link. -->
+                  <span class="menu-item is-static">
+                    <i class="dot" [class.bg-warning]="d.status === 'building' || d.status === 'queued'" [class.bg-danger]="d.status === 'failed'"></i>
+                    <span><b class="capitalize">{{ d.target }} · v{{ d.documentVersion }}</b><small>{{ statusLabel(d.status) }}</small></span>
+                  </span>
+                }
               }
             }
           </div>
@@ -151,6 +160,8 @@ import { StudioStore } from '../state/studio.store';
     .status[data-state='error'] i { background: var(--mad-danger); }
     .menu-item { display: flex; width: 100%; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; text-align: left; color: var(--mad-ink-2); }
     .menu-item:hover { background: var(--mad-hover); color: var(--mad-ink); }
+    .menu-item.is-static, .menu-item.is-static:hover { background: transparent; color: var(--mad-ink-4); cursor: default; }
+    .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--mad-line-strong); flex-shrink: 0; }
     .menu-item span { display: flex; flex-direction: column; line-height: 1.2; }
     .menu-item b { font-size: 0.8rem; font-weight: 600; }
     .menu-item small { font-size: 0.68rem; color: var(--mad-ink-4); }
@@ -246,6 +257,22 @@ export class StudioTopbar {
   protected onEscape(): void {
     this.deployOpen.set(false);
     this.accountOpen.set(false);
+  }
+
+  /** Wording for a deployment with no URL to open. */
+  protected statusLabel(status: Deployment['status']): string {
+    switch (status) {
+      case 'queued':
+        return 'Queued';
+      case 'building':
+        return 'Building';
+      case 'failed':
+        return 'Failed';
+      case 'rolled-back':
+        return 'Withdrawn — superseded by a newer preview';
+      default:
+        return status;
+    }
   }
 
   protected signOut(): void {

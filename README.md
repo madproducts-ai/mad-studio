@@ -92,7 +92,7 @@ With `ANTHROPIC_API_KEY` set, the API asks Claude (`PLANNER_MODEL`, default `cla
 
 ### Deployments
 
-Deploy renders the saved document version with `@mad/export` — a static HTML renderer generated from the studio canvas CSS (`npm run sync:export-css`) — and writes `index.html`, `manifest.json` and `document.json` to `DEPLOY_EXPORT_ROOT`. Production deploys own `<slug>-<id>/` and are replaced in place; previews are immutable snapshots under `<slug>-<id>/p/<deployment>/`. Without `DEPLOY_PUBLIC_BASE` the API serves the export root itself at `/exports/`; on the fleet the FE site serves it under `https://studio.madproducts.ai/apps/`.
+Deploy renders the saved document version with `@mad/export` — a static HTML renderer generated from the studio canvas CSS (`npm run sync:export-css`) — and writes `index.html`, `manifest.json` and `document.json` to `DEPLOY_EXPORT_ROOT`. Production deploys own `<slug>-<id>/` and are replaced in place; previews are immutable snapshots under `<slug>-<id>/p/<deployment>/`. The five most recent previews of a project stay reachable â€” publishing a sixth removes the oldest snapshot from disk and marks that deployment withdrawn, so the host cannot fill up with old previews. Without `DEPLOY_PUBLIC_BASE` the API serves the export root itself at `/exports/`; on the fleet the FE site serves it under `https://studio.madproducts.ai/apps/`.
 
 ## Deploy
 
