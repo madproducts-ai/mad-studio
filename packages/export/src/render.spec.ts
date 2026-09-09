@@ -5,6 +5,7 @@ import { MadDocumentSchema, NODE_TYPES, countNodes, type MadDocument, type MadNo
 import { buildManifest, hostStyle, renderDocumentHtml, renderNodeHtml } from './render';
 import { EXPORT_ICONS } from './icons';
 import { RENDERER_CSS } from './renderer.css';
+import { RUNTIME_JS } from './runtime.js.gen';
 
 const repoRoot = resolve(__dirname, '../../..');
 
@@ -57,7 +58,7 @@ describe('renderNodeHtml', () => {
       expect(html, cls).toMatch(new RegExp(`class="[^"]*\\b${cls}\\b`));
     }
     expect(html).toContain('r-node r-hidden');
-    expect(html).toContain('class="r-tab is-active" role="tab">Two<');
+    expect(html).toContain('aria-selected="true"');
     expect(html).toContain('<polyline points=');
     expect(html).toContain('<linearGradient');
     expect(html).toContain('class="bar"');
@@ -102,8 +103,68 @@ describe('renderDocumentHtml', () => {
     expect(renderDocumentHtml(doc, { ...options, fonts: false })).not.toContain('fonts.googleapis.com');
   });
 
+  it('ships the behaviour runtime, and can be asked not to', () => {
+    expect(renderDocumentHtml(doc, options)).toContain(RUNTIME_JS);
+    const inert = renderDocumentHtml(doc, { ...options, interactive: false });
+    expect(inert).not.toContain(RUNTIME_JS);
+    // The device script is not part of the runtime and stays either way.
+    expect(inert).toContain("setAttribute('data-device'");
+  });
+
   it('builds a manifest that summarises the document', () => {
     expect(buildManifest(doc, options)).toMatchObject({ generator: 'mad-studio', deploymentId: 'dep-1', version: 3, nodeCount: countNodes(everyType), tables: ['deals'], integrations: ['stripe'] });
+  });
+});
+
+describe('controls a person can actually use', () => {
+  // The page used to be a picture: every control was a span, so a deployed app
+  // had one focusable element in the whole document.
+  const html = renderNodeHtml(everyType);
+
+  it('emits real controls rather than styled spans', () => {
+    expect(html).toMatch(/<button type="button" class="[^"]*r-btn/);
+    expect(html).toMatch(/<input class="r-input"/);
+    expect(html).toMatch(/<select class="r-input r-select"/);
+    expect(html).toMatch(/<input type="checkbox" class="r-check"/);
+    expect(html).toContain('<button type="submit"');
+    expect(html).toContain('<button type="reset"');
+    expect(html).not.toContain('onsubmit');
+    expect(html).not.toContain('class="r-placeholder"');
+  });
+
+  it('binds every field label to its control', () => {
+    for (const match of html.matchAll(/<label class="r-label" for="([^"]+)"/g)) {
+      expect(html, match[1]).toContain(`id="${match[1]}"`);
+    }
+    expect(html).toMatch(/<label class="r-label" for="[^"]+">Email/);
+  });
+
+  it('offers every option of a select, not just the first', () => {
+    expect(html).toContain('<option value="Pro" selected>Pro</option>');
+    expect(html).toContain('<option value="Team">Team</option>');
+  });
+
+  it('ships every tab panel so switching needs no round trip', () => {
+    expect(html.match(/role="tabpanel"/g)).toHaveLength(2);
+    expect(html).toContain('aria-controls="n_xxxxxxxi-panel-0"');
+    expect(html).toContain('aria-labelledby="n_xxxxxxxi-tab-0"');
+    expect(html).toContain('first');
+  });
+
+  it('marks a sortable column so a screen reader can hear the order', () => {
+    expect(html).toContain('<th scope="col" aria-sort="none">');
+    expect(html).toContain('class="r-th-sort"');
+  });
+
+  it('names the controls that are only an icon', () => {
+    for (const match of html.matchAll(/<button type="button" class="r-icon-btn"([^>]*)>/g)) {
+      expect(match[1], match[0]).toContain('aria-label=');
+    }
+  });
+
+  it('closes void elements properly', () => {
+    expect(html).not.toContain('</input>');
+    expect(html).not.toContain('</img>');
   });
 });
 
@@ -115,6 +176,13 @@ describe('parity with the studio renderer', () => {
     expect(RENDERER_CSS).not.toContain('mad-node');
     expect(RENDERER_CSS).toContain(".r-frame[data-device='iphone']");
     expect(RENDERER_CSS).toContain("[data-ds='material'] .r-btn");
+  });
+
+  it('ships a runtime built from the current source (run npm run build:runtime)', async () => {
+    const mod = (await import(/* @vite-ignore */ new URL('../../../scripts/build-runtime.mjs', import.meta.url).href)) as { buildRuntimeJs: (root: string) => Promise<string> };
+    expect(RUNTIME_JS).toBe(await mod.buildRuntimeJs(repoRoot));
+    // Inlined into HTML, so a closing tag anywhere in it would end the script early.
+    expect(RUNTIME_JS).not.toMatch(/<\/script/i);
   });
 
   it('uses icon paths identical to the studio icon set', () => {

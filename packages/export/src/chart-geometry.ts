@@ -21,6 +21,10 @@ export interface ChartBar {
   w: number;
   h: number;
   color: string;
+  /** Which series this bar belongs to, so a legend can hide it and a tooltip can name it. */
+  series: number;
+  /** The plotted value, 0..1. The deployed page rounds it to a readable figure. */
+  value: number;
 }
 
 export interface DonutSegment {
@@ -66,8 +70,9 @@ export const chartBars = (seed: string, points: number, seriesCount = 1): ChartB
   for (let s = 0; s < count; s += 1) {
     const values = series(r, groups, 0.12);
     for (let i = 0; i < groups; i += 1) {
-      const h = (values[i] ?? 0.5) * (CHART_H - 6);
-      bars.push({ x: i * (groupWidth + groupGap) + s * (w + barGap), y: CHART_H - h, w, h, color: CHART_PALETTE[s % CHART_PALETTE.length] as string });
+      const value = values[i] ?? 0.5;
+      const h = value * (CHART_H - 6);
+      bars.push({ x: i * (groupWidth + groupGap) + s * (w + barGap), y: CHART_H - h, w, h, color: CHART_PALETTE[s % CHART_PALETTE.length] as string, series: s, value });
     }
   }
   return bars;

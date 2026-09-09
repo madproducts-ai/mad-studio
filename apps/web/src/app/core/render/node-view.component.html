@@ -305,7 +305,7 @@
               @for (cell of row; track $index) {
                 <td>
                   @if (tableColumns()[$index]?.toLowerCase().includes('status')) {
-                    <span class="r-badge r-badge-inline" [attr.data-tone]="cell === 'Active' || cell === 'Synced' ? 'success' : cell === 'Past due' || cell === 'Churn risk' ? 'danger' : cell === 'Trial' || cell === 'Pending' ? 'warning' : 'neutral'">{{ cell }}</span>
+                    <span class="r-badge r-badge-inline" [attr.data-tone]="statusTone(cell)">{{ cell }}</span>
                   } @else {
                     {{ cell }}
                   }

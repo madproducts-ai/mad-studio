@@ -313,11 +313,13 @@ export const tasksModule: FeatureModule = {
       ctx,
       'Board',
       [
-        row(ctx, 'Board toolbar', [
-          tabs(ctx, 'Board views', ['Board', 'List', 'Timeline'], []),
-          row(ctx, 'Actions', [select(ctx, 'Sprint', ['Sprint 14', 'Sprint 15', 'Backlog']), button(ctx, 'New task', 'primary', 'plus')], { justify: 'end' }),
+        row(ctx, 'Board toolbar', [row(ctx, 'Actions', [select(ctx, 'Sprint', ['Sprint 14', 'Sprint 15', 'Backlog']), button(ctx, 'New task', 'primary', 'plus')], { justify: 'end' })]),
+        // Three real views of the same work, so every tab lands somewhere.
+        tabs(ctx, 'Board views', ['Board', 'List', 'Timeline'], [
+          kanban(ctx, 'Task board', ['Backlog', 'In progress', 'In review', 'Done'], 4),
+          table(ctx, 'All tasks', ['Title', 'Status', 'Priority', 'Assignee', 'Due date'], 8, true, ['Backlog', 'In progress', 'In review', 'Done', 'Blocked']),
+          timeline(ctx, 'Task activity', ['Ship billing webhook moved to In review', 'Retry logic merged', 'Sprint 14 planning closed', 'Two tasks reassigned to Devon']),
         ]),
-        kanban(ctx, 'Task board', ['Backlog', 'In progress', 'In review', 'Done'], 4),
       ],
       'Work, in flight.',
       'TASKS',
@@ -366,10 +368,11 @@ export const cmsModule: FeatureModule = {
       'Content',
       [
         row(ctx, 'Content toolbar', [
-          tabs(ctx, 'Content states', ['All', 'Drafts', 'Scheduled', 'Published'], []),
+          // The labels are the values in the Status column, so the filter has something to match.
+          tabs(ctx, 'Content states', ['All', 'Draft', 'Scheduled', 'Published'], []),
           row(ctx, 'Actions', [button(ctx, 'New post', 'primary', 'plus')], { justify: 'end' }),
         ]),
-        table(ctx, 'Posts', ['Title', 'Author', 'Category', 'Status', 'Updated', 'Views'], 8),
+        table(ctx, 'Posts', ['Title', 'Author', 'Category', 'Status', 'Updated', 'Views'], 8, true, ['Draft', 'Scheduled', 'Published', 'Review']),
       ],
       'Draft, review, publish.',
       'CONTENT',

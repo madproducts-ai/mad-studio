@@ -135,6 +135,16 @@ The static exporter's stylesheet is generated from the canvas CSS by `npm run sy
 
 Layout breakpoints in the editor: below 640px the secondary actions fold away, below 1024px the preview controls hide and the left panel floats over the canvas instead of taking width from it. Verified at 375, 768, 1440 and 812x375 landscape.
 
+## Generated apps
+
+A deployed page is an application, not a screenshot of one. The exporter emits real buttons, inputs, selects, checkboxes and tabs, and inlines a runtime (`packages/export/src/runtime.ts`) that gives them behaviour: sortable and selectable tables with a live row count, a page filter, tab panels with arrow-key navigation, forms that validate and confirm, switches, a chat composer, a kanban board you can drag or move with Ctrl and an arrow key, chart legends that hide their series, and a notifications popover that closes on Escape. Buttons with an obvious job do it, so Export downloads the CSV of the table it sits with. The rest confirm the press, which is the honest answer for a generated demo.
+
+The runtime is written in TypeScript so it is type-checked and linted with everything else, then compiled by `npm run build:runtime` into `runtime.js.gen.ts`, the same shape as the stylesheet pipeline. Both generated files are committed and both have a test that fails when they drift from their source.
+
+The studio canvas deliberately does not do any of this. It draws the same components with the same classes, but as inert spans, because a live button on the canvas would swallow the click that selects a node. The canvas is the editor and the export is the running app; they share the class vocabulary, the inline-style mapping, the chart geometry, the seeded sample data and the status-badge colours, which is what keeps the preview and the deployed page the same design.
+
+`npm run render:samples` writes a few generated apps to a directory so a change to the exporter can be opened in a browser without running the API, the database or a deploy.
+
 ## Testing
 
 `npm test` runs Vitest across every workspace: the planner and the static exporter as plain unit tests, the API against a real request pipeline, and the web app through Angular's unit-test builder on jsdom.

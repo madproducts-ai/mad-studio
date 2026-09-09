@@ -16,9 +16,14 @@ export const attrs = (a: Attrs): string =>
     .map(([k, v]) => (v === true ? ` ${k}` : ` ${k}="${esc(v)}"`))
     .join('');
 
+/** Elements that must not be given a closing tag. */
+const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+
 export const el = (tag: string, a: Attrs = {}, children: string | string[] = ''): string => {
+  const open = `<${tag}${attrs(a)}>`;
+  if (VOID.has(tag)) return open;
   const inner = Array.isArray(children) ? children.join('') : children;
-  return `<${tag}${attrs(a)}>${inner}</${tag}>`;
+  return `${open}${inner}</${tag}>`;
 };
 
 export const styleAttr = (style: Record<string, string>): string =>

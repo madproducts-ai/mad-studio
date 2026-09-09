@@ -4,13 +4,22 @@ import { cellFor, chatThread, hashSeed, initials, personName, rng, taskCard } fr
 import { attrs, classes, el, esc, styleAttr } from './html';
 import { BUTTON_ICON_MAP, EXPORT_ICONS, iconSvg, type ExportIconName } from './icons';
 import { RENDERER_CSS } from './renderer.css';
+import { RUNTIME_JS } from './runtime.js.gen';
 
 /**
- * Static HTML renderer for MadDocuments. Mirrors the studio's canvas renderer
- * (apps/web/src/app/core/render/node-view.component.html) element for element
- * and class for class, so the deployed page is the preview the user approved.
- * Output is a single self-contained document: inline CSS, inline SVG, no
- * runtime dependencies beyond web fonts.
+ * Static HTML renderer for MadDocuments.
+ *
+ * It shares the studio canvas's class vocabulary and inline-style mapping
+ * (apps/web/src/app/core/render/node-view.component.html) so a deployed page
+ * looks like the preview the user approved. It deliberately does NOT share the
+ * canvas's element vocabulary: the canvas is an editor, where a live `<button>`
+ * would swallow the click that selects a node, so it draws controls as inert
+ * spans. A deployed page is the running application, so it emits real buttons,
+ * inputs, selects, checkboxes and tabs, and ships the runtime in `runtime.ts`
+ * that gives them behaviour.
+ *
+ * Output stays a single self-contained document: inline CSS, inline SVG, inline
+ * script, no runtime dependencies beyond web fonts.
  */
 
 const str = (v: PropValue | undefined, fallback = ''): string => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : fallback);
@@ -43,27 +52,39 @@ export const hostStyle = (s: StyleProps): string => {
 
 const children = (nodes: MadNode[]): string => el('div', { class: 'r-children' }, nodes.map((c) => renderNodeHtml(c)));
 
-const statusTone = (cell: string): string =>
-  cell === 'Active' || cell === 'Synced' ? 'success' : cell === 'Past due' || cell === 'Churn risk' ? 'danger' : cell === 'Trial' || cell === 'Pending' ? 'warning' : 'neutral';
+/** Per-node id for a control, so labels, panels and tabs can point at each other. */
+const uid = (node: MadNode, suffix: string): string => `${node.id}-${suffix}`;
+
+const SUCCESS = ['Active', 'Synced', 'Published', 'Paid', 'Shipped', 'Resolved'];
+const DANGER = ['Past due', 'Churn risk', 'Failed', 'Blocked', 'Cancelled'];
+const WARNING = ['Trial', 'Pending', 'Scheduled', 'Review', 'On hold'];
+
+/** Shared with the canvas, so a status badge is the same colour in the preview and the deployed page. */
+export const statusTone = (cell: string): string => (SUCCESS.indexOf(cell) >= 0 ? 'success' : DANGER.indexOf(cell) >= 0 ? 'danger' : WARNING.indexOf(cell) >= 0 ? 'warning' : 'neutral');
 
 const badge = (text: string, tone: string, inline = false): string => el('span', { class: classes('r-badge', inline && 'r-badge-inline'), 'data-tone': tone }, esc(text));
 
-const btn = (label: string, variant: string, extra: string[] = [], icon: ExportIconName | null = null): string =>
-  el('span', { class: classes('r-btn', `r-btn-${variant}`, ...extra) }, `${icon ? iconSvg(icon, 14) : ''}${esc(label)}`);
+/** A real button. `extra` carries size/width modifiers, `more` any behaviour hooks. */
+const btn = (label: string, variant: string, extra: string[] = [], icon: ExportIconName | null = null, more: Record<string, string | boolean> = {}): string =>
+  el('button', { type: 'button', class: classes('r-btn', `r-btn-${variant}`, ...extra), ...more }, `${icon ? iconSvg(icon, 14) : ''}${esc(label)}`);
+
+const iconBtn = (icon: ExportIconName, label: string, more: Record<string, string | boolean> = {}): string =>
+  el('button', { type: 'button', class: 'r-icon-btn', 'aria-label': label, ...more }, iconSvg(icon, 14));
 
 const renderChart = (node: MadNode): string => {
   const p = node.props;
   const kind = str(p['kind'], 'line');
   const labels = list(p['series']).length ? list(p['series']) : ['Series'];
   const points = num(p['points'], 12);
+  const title = str(p['title'], 'Chart');
   if (kind === 'donut') {
     const segs = chartDonut(node.id, labels);
     return el('div', { class: 'r-chart-svg' }, [
       el('div', { class: 'r-donut' }, [
         el(
           'svg',
-          { viewBox: '0 0 120 120' },
-          segs.map((s) => `<circle cx="60" cy="60" r="46" fill="none" stroke="${esc(s.color)}" stroke-width="16" stroke-dasharray="${esc(s.dash)}" stroke-dashoffset="${esc(s.offset)}"/>`),
+          { viewBox: '0 0 120 120', role: 'img', 'aria-label': `${title}: ${segs.map((s) => `${s.label} ${s.pct}%`).join(', ')}` },
+          segs.map((s) => `<circle cx="60" cy="60" r="46" fill="none" stroke="${esc(s.color)}" stroke-width="16" stroke-dasharray="${esc(s.dash)}" stroke-dashoffset="${esc(s.offset)}"><title>${esc(s.label)}: ${s.pct}%</title></circle>`),
         ),
         el(
           'ul',
@@ -74,29 +95,49 @@ const renderChart = (node: MadNode): string => {
     ]);
   }
   const layers = chartLayers(node.id, labels, points);
-  const uid = hashSeed(node.id).toString(36);
+  const gid = hashSeed(node.id).toString(36);
   const grid = [0.25, 0.5, 0.75].map((y) => `<line x1="0" y1="${CHART_H * y}" x2="${CHART_W}" y2="${CHART_H * y}" stroke="var(--r-line)" stroke-dasharray="2 4"/>`).join('');
   let body: string;
   if (kind === 'bar') {
     body = chartBars(node.id, points, labels.length)
-      .map((b, i) => `<rect x="${b.x.toFixed(2)}" y="${b.y.toFixed(2)}" width="${b.w.toFixed(2)}" height="${b.h.toFixed(2)}" fill="${esc(b.color)}" rx="2" class="bar" style="--i:${i}"/>`)
+      .map(
+        (b, i) =>
+          `<rect x="${b.x.toFixed(2)}" y="${b.y.toFixed(2)}" width="${b.w.toFixed(2)}" height="${b.h.toFixed(2)}" fill="${esc(b.color)}" rx="2" class="bar" style="--i:${i}" data-series="${b.series}"><title>${esc(labels[b.series] ?? '')}: ${Math.round(b.value * 100)}</title></rect>`,
+      )
       .join('');
   } else {
     const defs = layers
-      .map((l, i) => `<linearGradient id="g${uid}${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${esc(l.color)}" stop-opacity="0.35"/><stop offset="1" stop-color="${esc(l.color)}" stop-opacity="0"/></linearGradient>`)
+      .map((l, i) => `<linearGradient id="g${gid}${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${esc(l.color)}" stop-opacity="0.35"/><stop offset="1" stop-color="${esc(l.color)}" stop-opacity="0"/></linearGradient>`)
       .join('');
     body =
       `<defs>${defs}</defs>` +
       layers
         .map(
           (l, i) =>
-            `${kind === 'area' ? `<path d="${esc(l.area)}" fill="url(#g${uid}${i})"/>` : ''}<path d="${esc(l.path)}" fill="none" stroke="${esc(l.color)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" class="line"/>`,
+            `<g data-series="${i}">${kind === 'area' ? `<path d="${esc(l.area)}" fill="url(#g${gid}${i})"/>` : ''}<path d="${esc(l.path)}" fill="none" stroke="${esc(l.color)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" class="line"><title>${esc(labels[i] ?? '')}</title></path></g>`,
         )
         .join('');
   }
-  const legend = el('div', { class: 'r-chart-legend' }, layers.map((l, i) => el('span', {}, `<i style="background:${esc(l.color)}"></i>${esc(labels[i] ?? '')}`)));
-  return el('div', { class: 'r-chart-svg' }, [`<svg viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="none">${grid}${body}</svg>`, legend]);
+  // Legend entries toggle their series, so a busy chart can be read one line at a time.
+  const legend = el(
+    'div',
+    { class: 'r-chart-legend' },
+    layers.map((l, i) => el('button', { type: 'button', class: 'r-legend-item', 'data-series': String(i), 'aria-pressed': 'true' }, `<i style="background:${esc(l.color)}"></i>${esc(labels[i] ?? '')}`)),
+  );
+  return el('div', { class: 'r-chart-svg' }, [
+    `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="none" role="img" aria-label="${esc(title)}">${grid}${body}</svg>`,
+    legend,
+  ]);
 };
+
+/** A labelled field wrapper. The control is a sibling of the label, so `for` can bind them. */
+const field = (id: string, labelText: string, control: string, helper: string, required: boolean): string =>
+  el('div', { class: 'r-field' }, [
+    labelText ? el('label', { class: 'r-label', for: id }, `${esc(labelText)}${required ? '<span class="r-required" aria-hidden="true">*</span>' : ''}`) : '',
+    control,
+    helper ? el('span', { class: 'r-helper', id: `${id}-helper` }, esc(helper)) : '',
+    el('span', { class: 'r-error', id: `${id}-error`, role: 'alert', hidden: true }, ''),
+  ]);
 
 const renderInner = (n: MadNode): string => {
   const p = n.props;
@@ -106,14 +147,30 @@ const renderInner = (n: MadNode): string => {
       return el('div', { class: 'r-page', 'data-layout': str(p['layout'], 'app-shell') }, children(n.children));
 
     case 'nav': {
-      const links = list(p['links']).map((l) => el('span', { class: 'r-nav-link' }, esc(l)));
+      const links = list(p['links']).map((l, i) =>
+        el('button', { type: 'button', class: classes('r-nav-link', i === 0 && 'is-active'), 'data-nav': esc(l), 'aria-current': i === 0 ? 'page' : false }, esc(l)),
+      );
       const avatarName = str(p['name']) || personName(rng(seed));
+      const r = rng(seed);
+      const notices = [taskCard(r), taskCard(r), taskCard(r)];
       return el('header', { class: classes('r-nav', bool(p['sticky'], true) && 'r-nav-sticky') }, [
         el('span', { class: 'r-brand' }, `<span class="r-brand-mark"></span>${esc(str(p['brand'], 'Brand'))}`),
-        el('nav', { class: 'r-nav-links', 'aria-label': 'Navigation' }, links),
+        el('nav', { class: 'r-nav-links', 'aria-label': 'Sections' }, links),
         el('span', { class: 'r-nav-end' }, [
-          el('span', { class: 'r-icon-btn' }, iconSvg('search', 14)),
-          el('span', { class: 'r-icon-btn' }, iconSvg('bell', 14)),
+          el('span', { class: 'r-search-wrap' }, [
+            iconBtn('search', 'Search this page', { 'data-action': 'search-toggle', 'aria-expanded': 'false', 'aria-controls': uid(n, 'search') }),
+            el('input', { type: 'search', class: 'r-nav-search', id: uid(n, 'search'), placeholder: 'Filter rows and cards…', 'aria-label': 'Filter rows and cards', hidden: true }),
+          ]),
+          el('span', { class: 'r-popover-wrap' }, [
+            iconBtn('bell', 'Notifications', { 'data-action': 'notifications', 'aria-expanded': 'false', 'aria-controls': uid(n, 'notices') }),
+            el(
+              'div',
+              { class: 'r-popover', id: uid(n, 'notices'), role: 'group', 'aria-label': 'Notifications', hidden: true },
+              [el('span', { class: 'r-popover-title' }, 'Recent activity')].concat(
+                notices.map((t) => el('span', { class: 'r-popover-item' }, [el('span', { class: 'r-popover-tag' }, esc(t.tag)), el('span', {}, esc(t.title))])),
+              ),
+            ),
+          ]),
           str(p['cta']) ? btn(str(p['cta']), 'primary', ['r-btn-sm']) : '',
           el('span', { class: 'r-avatar r-avatar-sm' }, esc(initials(avatarName))),
         ]),
@@ -122,11 +179,25 @@ const renderInner = (n: MadNode): string => {
 
     case 'sidebar': {
       const active = num(p['active'], 0);
+      const items = list(p['items']);
       return el('aside', { class: 'r-sidebar' }, [
         el('span', { class: 'r-sidebar-label' }, 'Workspace'),
-        ...list(p['items']).map((item, i) => el('span', { class: classes('r-sidebar-item', i === active && 'is-active') }, `<span class="r-sidebar-dot"></span>${esc(item)}`)),
-        '<span class="r-sidebar-spacer"></span>',
-        el('span', { class: 'r-sidebar-item' }, '<span class="r-sidebar-dot"></span>Settings'),
+        el(
+          'nav',
+          { class: 'r-sidebar-nav', 'aria-label': 'Workspace' },
+          items
+            .map((item, i) =>
+              el(
+                'button',
+                { type: 'button', class: classes('r-sidebar-item', i === active && 'is-active'), 'data-nav': esc(item), 'aria-current': i === active ? 'page' : false },
+                `<span class="r-sidebar-dot"></span>${esc(item)}`,
+              ),
+            )
+            .concat([
+              '<span class="r-sidebar-spacer"></span>',
+              el('button', { type: 'button', class: 'r-sidebar-item', 'data-nav': 'Settings' }, '<span class="r-sidebar-dot"></span>Settings'),
+            ]),
+        ),
       ]);
     }
 
@@ -138,11 +209,11 @@ const renderInner = (n: MadNode): string => {
         eyebrow || title || subtitle
           ? el('header', { class: 'r-section-head' }, [
               eyebrow ? el('span', { class: 'r-eyebrow' }, esc(eyebrow)) : '',
-              title ? el('h2', { class: 'r-section-title' }, esc(title)) : '',
+              title ? el('h2', { class: 'r-section-title', id: uid(n, 'title') }, esc(title)) : '',
               subtitle ? el('p', { class: 'r-section-subtitle' }, esc(subtitle)) : '',
             ])
           : '';
-      return el('section', { class: 'r-section' }, [head, children(n.children)]);
+      return el('section', { class: 'r-section', ...(title ? { 'aria-labelledby': uid(n, 'title'), 'data-section': title } : {}) }, [head, children(n.children)]);
     }
 
     case 'stack':
@@ -162,18 +233,74 @@ const renderInner = (n: MadNode): string => {
     }
 
     case 'form':
-      return el('form', { class: 'r-form', 'data-layout': str(p['layout'], 'two-column'), onsubmit: 'return false' }, [
+      return el('form', { class: 'r-form', 'data-layout': str(p['layout'], 'two-column'), novalidate: true }, [
         str(p['title']) ? el('h3', { class: 'r-card-title' }, esc(str(p['title']))) : '',
         el('div', { class: 'r-body' }, children(n.children)),
-        el('div', { class: 'r-form-actions' }, [btn('Cancel', 'ghost'), btn(str(p['submitLabel'], 'Save'), 'primary')]),
+        el('p', { class: 'r-form-status', role: 'status', 'aria-live': 'polite' }, ''),
+        el('div', { class: 'r-form-actions' }, [
+          el('button', { type: 'reset', class: 'r-btn r-btn-ghost' }, 'Cancel'),
+          el('button', { type: 'submit', class: 'r-btn r-btn-primary' }, esc(str(p['submitLabel'], 'Save'))),
+        ]),
       ]);
 
     case 'tabs': {
       const active = num(p['active'], 0);
-      const panel = n.children[active] ?? n.children[0];
+      const named = list(p['tabs']);
+      // Pair each tab with a panel. A label with nothing behind it would be a
+      // dead end, and a panel with no label would be unreachable, so the count
+      // is whichever list is shorter, with generated names filling any gap.
+      // A tab strip with nothing nested under it is a toolbar filter over the
+      // section it sits in, which is how the planner uses it: "All / Drafts /
+      // Scheduled" are states of one table, not three separate views. Rendering
+      // it as a tablist would promise panels that do not exist, so it becomes a
+      // radio group and the runtime narrows the section's rows and cards.
+      if (n.children.length === 0) {
+        const filters = named.length ? named : ['All'];
+        const chosen = Math.min(Math.max(0, active), filters.length - 1);
+        return el('div', { class: 'r-tabs r-tabs-filter' }, [
+          el(
+            'div',
+            { class: 'r-tablist', role: 'radiogroup', 'aria-label': str(p['label'], 'Filter') },
+            filters.map((t, i) =>
+              el(
+                'button',
+                { type: 'button', class: classes('r-tab', i === chosen && 'is-active'), role: 'radio', 'aria-checked': i === chosen ? 'true' : 'false', tabindex: i === chosen ? 0 : -1, 'data-filter': esc(t) },
+                esc(t),
+              ),
+            ),
+          ),
+        ]);
+      }
+      const labels = n.children.map((_, i) => named[i] ?? `View ${i + 1}`);
+      const current = Math.min(Math.max(0, active), labels.length - 1);
+      // Every panel ships, hidden until selected, so switching needs no round trip.
       return el('div', { class: 'r-tabs' }, [
-        el('div', { class: 'r-tablist', role: 'tablist' }, list(p['tabs']).map((t, i) => el('span', { class: classes('r-tab', i === active && 'is-active'), role: 'tab' }, esc(t)))),
-        panel ? el('div', { class: 'r-tabpanel' }, renderNodeHtml(panel)) : '',
+        el(
+          'div',
+          { class: 'r-tablist', role: 'tablist', 'aria-label': 'Views' },
+          labels.map((t, i) =>
+            el(
+              'button',
+              {
+                type: 'button',
+                class: classes('r-tab', i === current && 'is-active'),
+                role: 'tab',
+                id: uid(n, `tab-${i}`),
+                'aria-controls': uid(n, `panel-${i}`),
+                'aria-selected': i === current ? 'true' : 'false',
+                tabindex: i === current ? 0 : -1,
+              },
+              esc(t),
+            ),
+          ),
+        ),
+        ...labels.map((_, i) =>
+          el(
+            'div',
+            { class: 'r-tabpanel', role: 'tabpanel', id: uid(n, `panel-${i}`), 'aria-labelledby': uid(n, `tab-${i}`), tabindex: 0, hidden: i !== current },
+            renderNodeHtml(n.children[i] as MadNode),
+          ),
+        ),
       ]);
     }
 
@@ -189,28 +316,63 @@ const renderInner = (n: MadNode): string => {
       const variant = str(p['variant'], 'primary');
       const raw = str(p['icon']);
       const icon: ExportIconName | null = raw in BUTTON_ICON_MAP ? (BUTTON_ICON_MAP[raw] as ExportIconName) : raw in EXPORT_ICONS ? (raw as ExportIconName) : null;
-      const extra = [str(p['size']) === 'sm' && 'r-btn-sm', str(p['size']) === 'lg' && 'r-btn-lg', bool(p['fullWidth']) && 'r-btn-full', bool(p['disabled']) && 'is-disabled'].filter((x): x is string => typeof x === 'string');
-      return btn(str(p['label'], 'Button'), ['primary', 'secondary', 'ghost', 'danger'].includes(variant) ? variant : 'primary', extra, icon);
+      // `is-disabled` keeps the existing styling; the attribute is what actually blocks the click.
+      const extra = [str(p['size']) === 'sm' && 'r-btn-sm', str(p['size']) === 'lg' && 'r-btn-lg', bool(p['fullWidth']) && 'r-btn-full', bool(p['disabled']) && 'is-disabled'].filter(
+        (x): x is string => typeof x === 'string',
+      );
+      return btn(str(p['label'], 'Button'), ['primary', 'secondary', 'ghost', 'danger'].includes(variant) ? variant : 'primary', extra, icon, bool(p['disabled']) ? { disabled: true } : {});
     }
 
     case 'input': {
       const label = str(p['label']);
       const type = str(p['inputType'], 'text');
-      return el('label', { class: 'r-field' }, [
-        label ? el('span', { class: 'r-label' }, `${esc(label)}${bool(p['required']) ? '<span class="r-required">*</span>' : ''}`) : '',
-        el('span', { class: 'r-input', 'data-type': type }, [type === 'search' ? iconSvg('search', 14) : '', el('span', { class: 'r-placeholder' }, esc(str(p['placeholder'], 'Enter a value')))]),
-        str(p['helper']) ? el('span', { class: 'r-helper' }, esc(str(p['helper']))) : '',
-      ]);
+      const id = uid(n, 'c');
+      const helper = str(p['helper']);
+      const required = bool(p['required']);
+      const common = {
+        class: 'r-input',
+        id,
+        placeholder: str(p['placeholder'], 'Enter a value'),
+        ...(required ? { required: true } : {}),
+        ...(helper ? { 'aria-describedby': `${id}-helper` } : {}),
+        ...(label ? {} : { 'aria-label': str(p['placeholder'], 'Enter a value') }),
+      };
+      const control =
+        type === 'textarea'
+          ? el('textarea', { ...common, rows: 3, 'data-type': 'textarea' }, '')
+          : type === 'search'
+            ? el('span', { class: 'r-input-wrap', 'data-type': 'search' }, [iconSvg('search', 14), el('input', { ...common, type: 'search' }, '')])
+            : el('input', { ...common, type: ['text', 'email', 'password', 'number', 'tel', 'url', 'date'].includes(type) ? type : 'text', 'data-type': type }, '');
+      return field(id, label, control, helper, required);
     }
 
-    case 'select':
-      return el('label', { class: 'r-field' }, [
-        str(p['label']) ? el('span', { class: 'r-label' }, esc(str(p['label']))) : '',
-        el('span', { class: 'r-input r-select' }, [el('span', {}, esc(list(p['options'])[0] ?? 'Select…')), iconSvg('chevron-down', 14)]),
-      ]);
+    case 'select': {
+      const id = uid(n, 'c');
+      const options = list(p['options']).length ? list(p['options']) : ['Option A', 'Option B'];
+      return field(
+        id,
+        str(p['label']),
+        el('span', { class: 'r-input-wrap', 'data-type': 'select' }, [
+          el(
+            'select',
+            { class: 'r-input r-select', id, ...(str(p['label']) ? {} : { 'aria-label': 'Select an option' }) },
+            options.map((o, i) => el('option', { value: esc(o), selected: i === 0 }, esc(o))),
+          ),
+          iconSvg('chevron-down', 14),
+        ]),
+        str(p['helper']),
+        bool(p['required']),
+      );
+    }
 
-    case 'toggle':
-      return el('span', { class: classes('r-toggle', bool(p['checked']) && 'is-on') }, [el('span', { class: 'r-toggle-label' }, esc(str(p['label'], 'Toggle'))), '<span class="r-switch"><span class="r-knob"></span></span>']);
+    case 'toggle': {
+      const id = uid(n, 'c');
+      const on = bool(p['checked']);
+      return el('span', { class: classes('r-toggle', on && 'is-on') }, [
+        el('label', { class: 'r-toggle-label', for: id }, esc(str(p['label'], 'Toggle'))),
+        el('button', { type: 'button', class: 'r-switch', id, role: 'switch', 'aria-checked': on ? 'true' : 'false' }, '<span class="r-knob"></span>'),
+      ]);
+    }
 
     case 'badge':
       return badge(str(p['text'], 'Badge'), str(p['tone'], 'neutral'));
@@ -251,24 +413,41 @@ const renderInner = (n: MadNode): string => {
       const r = rng(seed);
       const cols = list(p['columns']).length ? list(p['columns']) : ['Name', 'Status', 'Updated'];
       const rowsN = Math.min(50, Math.max(1, num(p['rows'], 6)));
-      const rows = Array.from({ length: rowsN }, (_, i) => cols.map((c) => cellFor(c, r, i)));
+      const statuses = list(p['statuses']);
+      const rows = Array.from({ length: rowsN }, (_, i) => cols.map((c) => cellFor(c, r, i, statuses)));
       const selectable = bool(p['selectable']);
-      const check = '<span class="r-check"></span>';
+      const title = str(p['title']);
       return el('div', { class: 'r-table-wrap' }, [
-        str(p['title']) ? el('div', { class: 'r-table-head' }, [el('span', { class: 'r-card-title' }, esc(str(p['title']))), el('span', { class: 'r-table-count' }, `${rows.length} rows`)]) : '',
+        title
+          ? el('div', { class: 'r-table-head' }, [
+              el('span', { class: 'r-card-title' }, esc(title)),
+              el('span', { class: 'r-table-count', role: 'status', 'aria-live': 'polite' }, `${rows.length} rows`),
+            ])
+          : el('div', { class: 'r-table-head r-table-head-bare' }, el('span', { class: 'r-table-count', role: 'status', 'aria-live': 'polite' }, `${rows.length} rows`)),
         el('table', { class: classes('r-table', bool(p['striped']) && 'is-striped') }, [
-          el('thead', {}, el('tr', {}, [selectable ? el('th', { class: 'r-th-check' }, check) : '', ...cols.map((c) => el('th', {}, esc(c)))])),
+          el(
+            'thead',
+            {},
+            el('tr', {}, [
+              selectable
+                ? el('th', { class: 'r-th-check', scope: 'col' }, el('input', { type: 'checkbox', class: 'r-check', 'data-role': 'select-all', 'aria-label': 'Select all rows' }, ''))
+                : '',
+              // Every column sorts. `aria-sort` on the header is what a screen reader reads back.
+              ...cols.map((c) => el('th', { scope: 'col', 'aria-sort': 'none' }, el('button', { type: 'button', class: 'r-th-sort' }, `${esc(c)}${iconSvg('chevron-down', 12)}`))),
+            ]),
+          ),
           el(
             'tbody',
             {},
-            rows.map((row) =>
+            rows.map((row, ri) =>
               el('tr', {}, [
-                selectable ? el('td', { class: 'r-th-check' }, check) : '',
+                selectable ? el('td', { class: 'r-th-check' }, el('input', { type: 'checkbox', class: 'r-check', 'aria-label': `Select row ${ri + 1}` }, '')) : '',
                 ...row.map((cell, ci) => el('td', {}, (cols[ci] ?? '').toLowerCase().includes('status') ? badge(cell, statusTone(cell), true) : esc(cell))),
               ]),
             ),
           ),
         ]),
+        el('p', { class: 'r-empty-state', hidden: true }, 'No rows match your filter.'),
       ]);
     }
 
@@ -297,14 +476,25 @@ const renderInner = (n: MadNode): string => {
             next += 1;
             return { ...generated, title: label };
           });
-          return el('div', { class: 'r-kanban-col' }, [
+          return el('div', { class: 'r-kanban-col', 'data-column': esc(title) }, [
             el('span', { class: 'r-kanban-head' }, `${esc(title)}<span class="r-kanban-count">${cards.length}</span>`),
-            ...cards.map((c) =>
-              el('div', { class: 'r-kanban-card' }, [
-                el('span', { class: 'r-kanban-tag' }, esc(c.tag)),
-                el('span', { class: 'r-kanban-title' }, esc(c.title)),
-                el('span', { class: 'r-kanban-meta' }, [el('span', { class: 'r-avatar r-avatar-xs' }, esc(initials(c.assignee))), badge(c.priority, c.priority === 'P0' ? 'danger' : c.priority === 'P1' ? 'warning' : 'neutral', true)]),
-              ]),
+            el(
+              'ul',
+              { class: 'r-kanban-cards', 'aria-label': `${esc(title)} cards` },
+              cards.map((c) =>
+                el(
+                  'li',
+                  {},
+                  el('button', { type: 'button', class: 'r-kanban-card', draggable: 'true' }, [
+                    el('span', { class: 'r-kanban-tag' }, esc(c.tag)),
+                    el('span', { class: 'r-kanban-title' }, esc(c.title)),
+                    el('span', { class: 'r-kanban-meta' }, [
+                      el('span', { class: 'r-avatar r-avatar-xs' }, esc(initials(c.assignee))),
+                      badge(c.priority, c.priority === 'P0' ? 'danger' : c.priority === 'P1' ? 'warning' : 'neutral', true),
+                    ]),
+                  ]),
+                ),
+              ),
             ),
           ]);
         }),
@@ -314,6 +504,7 @@ const renderInner = (n: MadNode): string => {
     case 'chat': {
       const thread = chatThread(rng(seed), str(p['agentName'], 'Agent'));
       const first = thread[0];
+      const id = uid(n, 'c');
       return el('div', { class: 'r-chat' }, [
         el('div', { class: 'r-chat-head' }, [
           el('span', { class: 'r-avatar r-avatar-sm' }, esc(initials(first?.name ?? 'C'))),
@@ -321,14 +512,17 @@ const renderInner = (n: MadNode): string => {
             el('span', { class: 'r-chat-name' }, esc(first?.name ?? '')),
             bool(p['showStatus'], true) ? el('span', { class: 'r-chat-status' }, `<span class="r-online"></span>Online · replied ${esc(thread[2]?.time ?? '')}`) : '',
           ]),
-          el('span', { class: 'r-icon-btn' }, iconSvg('info', 14)),
+          iconBtn('info', 'Conversation details'),
         ]),
         el(
           'div',
-          { class: 'r-chat-body' },
+          { class: 'r-chat-body', role: 'log', 'aria-label': 'Conversation', 'aria-live': 'polite' },
           thread.map((m) => el('div', { class: 'r-msg', 'data-from': m.from }, [el('span', { class: 'r-msg-bubble' }, esc(m.text)), el('span', { class: 'r-msg-meta' }, `${m.from === 'agent' ? esc(m.name) : ''} ${esc(m.time)}`)])),
         ),
-        el('div', { class: 'r-chat-composer' }, [el('span', { class: 'r-placeholder' }, esc(str(p['placeholder'], 'Type a reply…'))), el('span', { class: 'r-btn r-btn-primary r-btn-sm' }, iconSvg('arrow-right', 14))]),
+        el('form', { class: 'r-chat-composer' }, [
+          el('input', { type: 'text', class: 'r-chat-input', id, placeholder: str(p['placeholder'], 'Type a reply…'), 'aria-label': 'Message', autocomplete: 'off' }, ''),
+          el('button', { type: 'submit', class: 'r-btn r-btn-primary r-btn-sm', 'aria-label': 'Send message' }, iconSvg('arrow-right', 14)),
+        ]),
       ]);
     }
 
@@ -355,7 +549,7 @@ const renderInner = (n: MadNode): string => {
       const highlight = num(p['highlight'], 1);
       return el(
         'div',
-        { class: 'r-pricing' },
+        { class: 'r-pricing', role: 'radiogroup', 'aria-label': 'Plans' },
         names.slice(0, 4).map((name, i) => {
           const price = prices[i] ?? 0;
           const isHi = i === highlight;
@@ -364,7 +558,7 @@ const renderInner = (n: MadNode): string => {
             el('span', { class: 'r-price-name' }, esc(name)),
             el('span', { class: 'r-price' }, [el('span', { class: 'r-price-amount' }, price === 0 ? 'Free' : `$${yearly ? Math.round(price * 10) : price}`), el('span', { class: 'r-price-period' }, price === 0 ? '' : yearly ? '/yr' : '/mo')]),
             el('ul', { class: 'r-list r-price-features' }, (features[i] ?? []).map((f) => el('li', {}, `${iconSvg('check', 12)}${esc(f)}`))),
-            btn(`Choose ${name}`, isHi ? 'primary' : 'secondary'),
+            el('button', { type: 'button', class: classes('r-btn', isHi ? 'r-btn-primary' : 'r-btn-secondary'), 'data-plan': esc(name), role: 'radio', 'aria-checked': 'false' }, `Choose ${esc(name)}`),
           ]);
         }),
       );
@@ -391,6 +585,8 @@ export interface RenderOptions {
   studioUrl?: string;
   /** Load the renderer's web fonts from Google Fonts (default true). */
   fonts?: boolean;
+  /** Ship the behaviour runtime (default true). Off produces the old static page. */
+  interactive?: boolean;
 }
 
 const FONT_HREF: Record<DesignSystem, string> = {
@@ -406,6 +602,7 @@ const DEVICE_SCRIPT =
 /** A complete, standalone HTML page for the document. */
 export const renderDocumentHtml = (document: MadDocument, options: RenderOptions): string => {
   const fonts = options.fonts !== false;
+  const interactive = options.interactive !== false;
   const badgeHtml = options.studioUrl
     ? el('a', { class: 'mad-badge', href: options.studioUrl, target: '_blank', rel: 'noopener' }, '<i></i>Built with MAD Studio')
     : '';
@@ -437,7 +634,8 @@ export const renderDocumentHtml = (document: MadDocument, options: RenderOptions
     },
     renderNodeHtml(document.root),
   );
-  return `<!doctype html>\n<html lang="en"${attrs({ 'data-theme': document.theme })}>\n<head>\n${head}\n</head>\n<body>\n${frame}\n${badgeHtml}\n<script>${DEVICE_SCRIPT}</script>\n<!-- Deployed ${esc(options.deployedAt)} · v${options.version} · ${options.target} -->\n</body>\n</html>\n`;
+  const scripts = `<script>${DEVICE_SCRIPT}</script>${interactive ? `\n<script>${RUNTIME_JS}</script>` : ''}`;
+  return `<!doctype html>\n<html lang="en"${attrs({ 'data-theme': document.theme })}>\n<head>\n${head}\n</head>\n<body>\n${frame}\n${badgeHtml}\n${scripts}\n<!-- Deployed ${esc(options.deployedAt)} · v${options.version} · ${options.target} -->\n</body>\n</html>\n`;
 };
 
 export interface DeployManifest {

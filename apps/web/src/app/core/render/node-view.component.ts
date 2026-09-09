@@ -5,7 +5,7 @@ import { isContainer } from '@mad/schema';
 import { Icon, type IconName, ICONS } from '../ui/icon.component';
 import { Chart } from './chart.component';
 import { RenderContext } from './render-context';
-import { sparklinePoints } from '@mad/export';
+import { sparklinePoints, statusTone } from '@mad/export';
 import { cellFor, chatThread, hashSeed, initials, personName, rng, taskCard } from './fake-data';
 
 const str = (v: PropValue | undefined, fallback = ''): string => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : fallback);
@@ -103,6 +103,9 @@ export class NodeView {
     return s.length ? s : ['Series'];
   });
 
+  /** Shared with the exporter so a status badge is the same colour in the preview and the deployed page. */
+  protected readonly statusTone = statusTone;
+
   protected readonly tableColumns = computed(() => {
     const cols = list(this.p()['columns']);
     return cols.length ? cols : ['Name', 'Status', 'Updated'];
@@ -111,7 +114,8 @@ export class NodeView {
     const r = rng(this.seed());
     const n = Math.min(50, Math.max(1, num(this.p()['rows'], 6)));
     const cols = this.tableColumns();
-    return Array.from({ length: n }, (_, i) => cols.map((c) => cellFor(c, r, i)));
+    const statuses = list(this.p()['statuses']);
+    return Array.from({ length: n }, (_, i) => cols.map((c) => cellFor(c, r, i, statuses)));
   });
 
   protected readonly kanban = computed(() => {

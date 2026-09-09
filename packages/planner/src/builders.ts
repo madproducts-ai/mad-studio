@@ -72,8 +72,9 @@ export const stat = (ctx: BuildContext, label: string, value: string, delta: str
 export const chart = (ctx: BuildContext, title: string, kind: 'line' | 'bar' | 'area' | 'donut', series: string[], points = 12) =>
   node(ctx, 'chart', title, { title, kind, series, points });
 
-export const table = (ctx: BuildContext, title: string, columns: string[], rows = 6, selectable = true) =>
-  node(ctx, 'table', title, { title, columns, rows, selectable, striped: false });
+/** `statuses` gives a status column its own vocabulary, so a posts table reads Draft/Published rather than Trial/Churn risk. */
+export const table = (ctx: BuildContext, title: string, columns: string[], rows = 6, selectable = true, statuses: string[] = []) =>
+  node(ctx, 'table', title, { title, columns, rows, selectable, striped: false, ...(statuses.length ? { statuses } : {}) });
 
 export const list = (ctx: BuildContext, name: string, items: string[], ordered = false) => node(ctx, 'list', name, { items, ordered });
 

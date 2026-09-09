@@ -45,12 +45,13 @@ export const initials = (name: string): string =>
     .map((p) => p.charAt(0).toUpperCase())
     .join('');
 
-export const cellFor = (column: string, r: () => number, rowIndex: number): string => {
+/** `statuses` lets a table declare its own vocabulary, so a posts table reads Draft/Published rather than Trial/Churn risk. */
+export const cellFor = (column: string, r: () => number, rowIndex: number, statuses: readonly string[] = STATUSES): string => {
   const c = column.toLowerCase();
   if (/name|member|customer|contact|owner|assignee|author|guest/.test(c)) return personName(r);
   if (/company|account|supplier|client/.test(c)) return pick(r, COMPANIES);
   if (/email/.test(c)) return `${pick(r, FIRST).toLowerCase()}@${pick(r, COMPANIES).toLowerCase().replace(/\s+/g, '')}.com`;
-  if (/status|state|fulfil|payment/.test(c)) return pick(r, STATUSES);
+  if (/status|state|fulfil|payment/.test(c)) return pick(r, statuses.length ? statuses : STATUSES);
   if (/plan|tier/.test(c)) return pick(r, PLANS);
   if (/stage/.test(c)) return pick(r, STAGES);
   if (/priority/.test(c)) return pick(r, PRIORITIES);

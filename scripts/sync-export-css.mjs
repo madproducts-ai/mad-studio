@@ -88,6 +88,86 @@ body { background: var(--r-bg); color: var(--r-ink); font-family: var(--r-font);
 .mad-badge:hover { opacity: 1; }
 .mad-badge i { width: 14px; height: 14px; border-radius: 4px; background: #f5a524; position: relative; }
 .mad-badge i::after { content: ''; position: absolute; right: 2px; bottom: 2px; width: 3px; height: 3px; background: #5fd3ff; }
+
+/* ---------- live controls ----------
+   The canvas draws controls as inert spans, because a live button there would
+   swallow the click that selects a node. A deployed page emits real buttons,
+   inputs, selects and checkboxes, so it carries the reset and the focus, hover
+   and state styling those elements need. None of this exists on the canvas. */
+.r-btn, .r-icon-btn, .r-nav-link, .r-sidebar-item, .r-tab, .r-th-sort, .r-legend-item, .r-switch, .r-kanban-card {
+  appearance: none; -webkit-appearance: none; background: none; border: 0; margin: 0; font: inherit; color: inherit; text-align: inherit; cursor: pointer;
+}
+.r-input, .r-select, .r-check { appearance: none; -webkit-appearance: none; font: inherit; }
+.r-btn:disabled, .r-btn.is-disabled { cursor: not-allowed; }
+:where(.r-btn, .r-icon-btn, .r-nav-link, .r-sidebar-item, .r-tab, .r-th-sort, .r-legend-item, .r-switch, .r-kanban-card, .r-input, .r-select, .r-check, .r-tabpanel):focus-visible {
+  outline: 2px solid var(--r-accent); outline-offset: 2px;
+}
+.r-tabpanel:focus { outline: none; }
+
+/* Fields: the label is a sibling of the control now, not a wrapper. */
+.r-field { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.r-input-wrap { position: relative; display: flex; align-items: center; width: 100%; }
+.r-input-wrap > .r-icon { position: absolute; left: 0.6rem; color: var(--r-ink-3); pointer-events: none; }
+.r-input-wrap[data-type='search'] > .r-input { padding-left: 2rem; }
+.r-input-wrap[data-type='select'] > .r-icon { left: auto; right: 0.6rem; }
+.r-input-wrap > .r-select { padding-right: 2rem; width: 100%; }
+.r-input::placeholder { color: var(--r-ink-3); opacity: 1; }
+textarea.r-input { resize: vertical; min-height: 4.5rem; line-height: 1.5; }
+.r-input[aria-invalid='true'] { border-color: var(--r-danger); }
+.r-error { display: block; font-size: 0.72em; color: var(--r-danger); }
+.r-error[hidden] { display: none; }
+.r-form-status { margin: 0; font-size: 0.78em; color: var(--r-ink-3); min-height: 1.2em; }
+.r-form-status[data-tone='success'] { color: var(--r-success); }
+.r-form-status[data-tone='danger'] { color: var(--r-danger); }
+
+/* Checkboxes: a real input, drawn like the span it replaced. */
+.r-check { display: inline-block; width: 14px; height: 14px; flex: none; border: 1px solid var(--r-line-strong); border-radius: 4px; background: var(--r-surface); cursor: pointer; position: relative; }
+.r-check:checked { background: var(--r-accent); border-color: var(--r-accent); }
+.r-check:checked::after { content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid var(--r-accent-ink); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.r-check:indeterminate { background: var(--r-accent); border-color: var(--r-accent); }
+.r-check:indeterminate::after { content: ''; position: absolute; left: 2px; top: 5px; width: 8px; height: 2px; background: var(--r-accent-ink); }
+.r-table tbody tr.is-selected { background: color-mix(in oklab, var(--r-accent) 10%, transparent); }
+
+/* Sortable headers */
+.r-th-sort { display: inline-flex; align-items: center; gap: 0.25rem; width: 100%; }
+.r-th-sort .r-icon { opacity: 0; transition: opacity 0.12s ease, transform 0.12s ease; }
+.r-th-sort:hover .r-icon, th[aria-sort='ascending'] .r-icon, th[aria-sort='descending'] .r-icon { opacity: 0.7; }
+th[aria-sort='ascending'] .r-icon { transform: rotate(180deg); }
+.r-table-head-bare { justify-content: flex-end; }
+.r-empty-state { margin: 0; padding: 1.25rem; text-align: center; font-size: 0.8em; color: var(--r-ink-3); }
+.r-empty-state[hidden] { display: none; }
+
+/* Nav search and notifications */
+.r-search-wrap, .r-popover-wrap { position: relative; display: inline-flex; align-items: center; }
+.r-nav-search { height: 30px; width: 13rem; max-width: 40vw; padding: 0 0.6rem; border: 1px solid var(--r-line-strong); border-radius: 8px; background: var(--r-surface); color: var(--r-ink); font: inherit; font-size: 0.8em; margin-left: 0.4rem; }
+.r-nav-search[hidden] { display: none; }
+.r-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; display: grid; gap: 0.5rem; width: 17rem; padding: 0.75rem; border: 1px solid var(--r-line-strong); border-radius: 12px; background: var(--r-raised); box-shadow: 0 18px 40px -20px rgb(0 0 0 / 0.55); }
+.r-popover[hidden] { display: none; }
+.r-popover-title { font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--r-ink-3); }
+.r-popover-item { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.78em; color: var(--r-ink-2); }
+.r-popover-tag { flex: none; font-size: 0.85em; color: var(--r-ink-3); }
+
+/* Kanban cards are buttons in lists now */
+.r-kanban-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.r-kanban-cards > li[hidden] { display: none; }
+.r-kanban-card { width: 100%; display: grid; gap: 0.4rem; }
+.r-kanban-card.is-dragging { opacity: 0.45; }
+.r-kanban-col.is-drop-target { outline: 2px dashed var(--r-accent); outline-offset: 3px; border-radius: 12px; }
+
+/* Chart legend entries toggle their series */
+.r-legend-item { display: inline-flex; align-items: center; gap: 0.375rem; }
+.r-legend-item.is-off { opacity: 0.4; }
+
+/* Chosen plan */
+.r-price-card.is-chosen { outline: 2px solid var(--r-accent); outline-offset: 2px; }
+
+/* Toasts */
+.r-toasts { position: fixed; left: 50%; bottom: 20px; z-index: 60; display: grid; gap: 0.5rem; justify-items: center; transform: translateX(-50%); pointer-events: none; }
+.r-toast { padding: 0.5rem 0.9rem; border-radius: 999px; border: 1px solid var(--r-line-strong); background: var(--r-raised); color: var(--r-ink); font-size: 0.8em; box-shadow: 0 12px 32px -16px rgb(0 0 0 / 0.6); animation: r-toast-in 0.24s var(--ease-out-expo) both; }
+.r-toast.is-leaving { animation: r-toast-out 0.24s ease forwards; }
+@keyframes r-toast-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes r-toast-out { to { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .r-toast, .r-toast.is-leaving { animation: none; } }
 `;
 
 export const buildRendererCss = (root = repoRoot) => {
