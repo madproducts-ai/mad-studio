@@ -344,6 +344,26 @@ Invoke-MadRobocopy -Source $FeDist -Destination $FeRoot `
 Write-MadWebConfig -Path (Join-Path $FeRoot 'web.config') -Xml $feWebConfig
 Ok 'FE synced + web.config written'
 
+# --- 6b. Re-render already-published apps with this build's renderer ----------------------------------
+# A deployment keeps the document it was built from, so a change to the exporter
+# reaches pages that are already live instead of waiting for someone to press
+# Deploy again. Without this, a fix to generated apps only applies to apps
+# generated after the fix.
+Step "Re-rendering published apps in $AppsRoot"
+$republish = Join-Path $AppDir 'scripts\republish-apps.mjs'
+if (Test-Path $republish) {
+    Push-Location $AppDir
+    try {
+        & npx tsx $republish $AppsRoot '--studio-url' "https://$FeHost/studio"
+        if ($LASTEXITCODE -ne 0) { throw "republish-apps.mjs exited with $LASTEXITCODE" }
+        Ok 'Published apps re-rendered'
+    } finally {
+        Pop-Location
+    }
+} else {
+    Warn "republish-apps.mjs not found; published apps keep their existing rendering"
+}
+
 # --- 7. App pools (No Managed Code, OnDemand) --------------------------------------------------------
 foreach ($pool in @($FePool, $ApiPool)) {
     if (-not (Test-Path "IIS:\AppPools\$pool")) {
